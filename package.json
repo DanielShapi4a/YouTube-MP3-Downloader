@@ -1,19 +1,55 @@
 {
-  "name": "react-example",
+  "name": "cartune-mp3",
   "private": true,
   "version": "0.0.0",
+  "description": "CarTune MP3 desktop downloader and converter.",
+  "author": "CarTune MP3",
   "type": "module",
+  "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "electron:build": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --format=cjs --external:electron --external:better-sqlite3 --external:ffmpeg-static --sourcemap --outdir=dist-electron --out-extension:.js=.cjs",
+    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000/api/health && npm run electron:build && cross-env NODE_ENV=development electron .\"",
+    "fetch:binaries": "node scripts/fetch-native-binaries.mjs",
+    "dist:win": "npm run fetch:binaries && npm run build && npm run electron:build && electron-builder --win",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "build": {
+    "appId": "com.cartune.mp3",
+    "productName": "CarTune MP3",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/bin",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    }
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
+    "better-sqlite3": "^11.9.1",
+    "ffmpeg-static": "^5.2.0",
     "lucide-react": "^0.546.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
@@ -23,13 +59,24 @@
     "motion": "^12.23.24"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^22.14.0",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.1.0",
+    "@testing-library/user-event": "^14.5.2",
     "autoprefixer": "^10.4.21",
+    "concurrently": "^9.1.2",
+    "cross-env": "^7.0.3",
+    "electron": "^35.0.1",
+    "electron-builder": "^26.0.12",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
-    "@types/express": "^4.17.21"
+    "@types/express": "^4.17.21",
+    "vitest": "^2.1.9",
+    "jsdom": "^25.0.1",
+    "wait-on": "^8.0.2"
   }
 }

@@ -7,9 +7,10 @@ interface SettingsModalProps {
   settings: AppSettings;
   onClose: () => void;
   onSave: (newSettings: AppSettings) => void;
+  onBrowseLocation?: () => Promise<string | null>;
 }
 
-export default function SettingsModal({ isOpen, settings, onClose, onSave }: SettingsModalProps) {
+export default function SettingsModal({ isOpen, settings, onClose, onSave, onBrowseLocation }: SettingsModalProps) {
   if (!isOpen) return null;
 
   const t = translations[settings.language];
@@ -26,7 +27,15 @@ export default function SettingsModal({ isOpen, settings, onClose, onSave }: Set
     onSave({ ...settings, advancedLogging: !settings.advancedLogging });
   };
 
-  const handleBrowseLocation = () => {
+  const handleBrowseLocation = async () => {
+    if (onBrowseLocation) {
+      const selected = await onBrowseLocation();
+      if (selected) {
+        onSave({ ...settings, saveLocation: selected });
+      }
+      return;
+    }
+
     // Simulated folder selection
     const mockDirectories = [
       "C:\\Users\\Admin\\Music\\CarTune",

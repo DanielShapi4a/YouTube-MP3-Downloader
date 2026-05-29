@@ -43,6 +43,16 @@ export default function Header({ settings, onUpdateLanguage, onOpenSettings, onH
 
       {/* Trailing Icon Shortcuts */}
       <div className="flex items-center gap-2 text-on-surface-variant">
+        <button
+          id="header-open-folder-btn"
+          onClick={onOpenFolder}
+          className="p-2.5 rounded-full hover:bg-surface-container-high hover:text-secondary text-on-surface transition-all active:scale-90 flex items-center justify-center cursor-pointer gap-2 border border-outline-variant/30 px-4"
+          title={t.openFolder}
+        >
+          <span className="material-icons-span text-[20px]">folder_open</span>
+          <span className="font-label-bold text-xs font-semibold select-none hidden sm:inline">{t.openFolder}</span>
+        </button>
+
         {/* Help button shortcut */}
         <button 
           id="header-help-btn"

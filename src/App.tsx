@@ -1,5 +1,16 @@
 import { useState, useEffect, useRef } from 'react';
-import { AppSettings, LibraryTrack, ActiveDownload, Playlist, LogEntry, Language, Quality } from './types';
+import {
+  AppSettings,
+  LibraryTrack,
+  ActiveDownload,
+  Playlist,
+  LogEntry,
+  Language,
+  Quality,
+  TrackMetadata,
+  PlaylistMetadata,
+  DownloadProgressEvent,
+} from './types';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './components/Dashboard';
@@ -89,9 +100,11 @@ const INITIAL_PLAYLISTS: Playlist[] = [
 ];
 
 export default function App() {
+  const desktopApi = window.carTune;
   const [activeTab, setActiveTab] = useState<'downloads' | 'completed' | 'playlists'>('downloads');
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
+  const [isDesktopReady, setIsDesktopReady] = useState<boolean>(!desktopApi);
   
   // App Settings State
   const [settings, setSettings] = useState<AppSettings>(() => {
@@ -111,6 +124,7 @@ export default function App() {
 
   // Track Library State
   const [tracks, setTracks] = useState<LibraryTrack[]>(() => {
+    if (desktopApi) return [];
     const saved = localStorage.getItem('cartune_tracks');
     if (saved) {
       try {
@@ -122,6 +136,7 @@ export default function App() {
 
   // Playlists State
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
+    if (desktopApi) return [];
     const saved = localStorage.getItem('cartune_playlists');
     if (saved) {
       try {
@@ -143,27 +158,68 @@ export default function App() {
 
   // Sync to local storage
   useEffect(() => {
-    localStorage.setItem('cartune_settings', JSON.stringify(settings));
+    if (desktopApi) {
+      if (isDesktopReady) {
+        desktopApi.settings.save(settings).catch((error) => {
+          addLog('error', `Failed to persist settings: ${error?.message || error}`);
+        });
+      }
+    } else {
+      localStorage.setItem('cartune_settings', JSON.stringify(settings));
+    }
     // Set Document Direction based on Locale
     document.documentElement.dir = settings.language === Language.HE ? 'rtl' : 'ltr';
     document.documentElement.lang = settings.language;
-  }, [settings]);
+  }, [settings, desktopApi, isDesktopReady]);
 
   useEffect(() => {
-    localStorage.setItem('cartune_tracks', JSON.stringify(tracks));
-  }, [tracks]);
+    if (!desktopApi) {
+      localStorage.setItem('cartune_tracks', JSON.stringify(tracks));
+    }
+  }, [tracks, desktopApi]);
 
   useEffect(() => {
-    localStorage.setItem('cartune_playlists', JSON.stringify(playlists));
-  }, [playlists]);
+    if (!desktopApi) {
+      localStorage.setItem('cartune_playlists', JSON.stringify(playlists));
+    }
+  }, [playlists, desktopApi]);
 
-  // Initial Boot-up logging
+  // Initial Boot-up logging and desktop state hydration
   useEffect(() => {
-    addLog('success', 'CarTune MP3 Core initialized and running.');
-    addLog('info', 'FFMPEG native libraries loaded successfully.');
-    addLog('info', 'Save location scanned: C:\\Users\\Admin\\Music\\CarTune');
-    addLog('success', 'Ready to compile tracks.');
-  }, []);
+    if (!desktopApi) {
+      addLog('success', 'CarTune MP3 Core initialized and running.');
+      addLog('info', 'FFMPEG native libraries loaded successfully.');
+      addLog('info', 'Save location scanned: C:\\Users\\Admin\\Music\\CarTune');
+      addLog('success', 'Ready to compile tracks.');
+      return;
+    }
+
+    let isMounted = true;
+    const unsubLog = desktopApi.downloads.onLog((event) => addLog(event.type, event.message));
+    const unsubProgress = desktopApi.downloads.onProgress((event) => handleNativeDownloadProgress(event));
+
+    Promise.all([
+      desktopApi.settings.get(),
+      desktopApi.library.listTracks(),
+      desktopApi.library.listPlaylists(),
+    ]).then(([savedSettings, savedTracks, savedPlaylists]) => {
+      if (!isMounted) return;
+      setSettings(savedSettings);
+      setTracks(savedTracks);
+      setPlaylists(savedPlaylists);
+      setIsDesktopReady(true);
+      addLog('success', 'Desktop library restored from SQLite.');
+    }).catch((error) => {
+      addLog('error', `Desktop state hydration failed: ${error?.message || error}`);
+      setIsDesktopReady(true);
+    });
+
+    return () => {
+      isMounted = false;
+      unsubLog();
+      unsubProgress();
+    };
+  }, [desktopApi]);
 
   const addLog = (type: 'info' | 'warning' | 'error' | 'success', message: string) => {
     const newLog: LogEntry = {
@@ -175,6 +231,42 @@ export default function App() {
     setLogs(prev => [...prev.slice(-99), newLog]); // Keep last 100 logs
   };
 
+  function handleNativeDownloadProgress(event: DownloadProgressEvent) {
+    if (event.status === 'completed' && event.track) {
+      setTracks(prev => {
+        const withoutDuplicate = prev.filter(track => track.id !== event.track!.id);
+        return [event.track!, ...withoutDuplicate];
+      });
+      setActiveDownload(null);
+      addLog('success', `CarTune MP3 successfully outputted to: ${event.track.filePath}`);
+    } else if (event.status === 'failed') {
+      setActiveDownload(null);
+      addLog('error', event.error || `Download failed for ${event.title}`);
+    } else {
+      setActiveDownload({
+        id: event.jobId,
+        title: event.title,
+        artist: event.artist,
+        duration: event.duration,
+        progress: Math.round(event.progress),
+        speed: event.speed,
+        eta: event.eta,
+        status: event.status,
+        thumbnailUrl: event.thumbnailUrl,
+        playlistId: event.playlistId,
+        error: event.error,
+      });
+    }
+
+    if (event.playlistId && typeof event.downloadedTracks === 'number') {
+      setPlaylists(prev => prev.map(playlist => playlist.id === event.playlistId ? {
+        ...playlist,
+        downloadedTracks: event.downloadedTracks!,
+        status: event.status === 'completed' && event.downloadedTracks === playlist.totalTracks ? 'completed' : 'processing',
+      } : playlist));
+    }
+  }
+
   const handleUpdateLanguage = (lang: Language) => {
     setSettings(prev => ({ ...prev, language: lang }));
     addLog('info', `Language orientation changed to: ${lang}`);
@@ -185,7 +277,17 @@ export default function App() {
     addLog('success', 'Configuration preferences saved successfully.');
   };
 
-  const handleOpenFolder = () => {
+  const handleOpenFolder = async () => {
+    if (desktopApi) {
+      try {
+        await desktopApi.shell.openFolder(settings.saveLocation);
+        addLog('info', `Opened output folder: ${settings.saveLocation}`);
+      } catch (error: any) {
+        addLog('error', `Unable to open output folder: ${error?.message || error}`);
+      }
+      return;
+    }
+
     addLog('info', `Simulating system folder call: ${settings.saveLocation}`);
     alert(
       settings.language === Language.HE 
@@ -197,6 +299,12 @@ export default function App() {
   };
 
   const handleCancelDownload = (id: string) => {
+    if (desktopApi) {
+      desktopApi.downloads.cancel(id).catch((error) => {
+        addLog('error', `Unable to cancel native download: ${error?.message || error}`);
+      });
+    }
+
     if (downloadTimerRef.current) {
       clearInterval(downloadTimerRef.current);
       downloadTimerRef.current = null;
@@ -208,12 +316,18 @@ export default function App() {
   const handleClearAllTracks = () => {
     if (confirm(settings.language === Language.HE ? "האם למחוק את כל השירים מספריית המוזיקה?" : settings.language === Language.RU ? "Вы уверены, что хотите удалить ВСЕ песни?" : "Are you sure you want to delete ALL downloaded songs?")) {
       setTracks([]);
+      desktopApi?.library.clearTracks().catch((error) => {
+        addLog('error', `Unable to clear SQLite library: ${error?.message || error}`);
+      });
       addLog('warning', 'Completed library history wiped.');
     }
   };
 
   const handleDeleteTrack = (id: string) => {
     setTracks(prev => prev.filter(t => t.id !== id));
+    desktopApi?.library.deleteTrack(id).catch((error) => {
+      addLog('error', `Unable to delete track from SQLite: ${error?.message || error}`);
+    });
     addLog('info', `Completed track removed from local indexes: ${id}`);
   };
 
@@ -317,6 +431,63 @@ export default function App() {
   // Triggering the downloading mechanism
   const handleStartDownload = async (url: string, isPlaylist: boolean) => {
     addLog('info', `API fetch initiated mapping URL context: ${url}`);
+
+    if (desktopApi) {
+      try {
+        const data = await desktopApi.metadata.inspect({ url, isPlaylist });
+
+        if (isPlaylist) {
+          const playlistData = data as PlaylistMetadata;
+          const newPlaylist: Playlist = {
+            id: `playlist-${Date.now()}`,
+            name: playlistData.name,
+            url: url.replace('https://', ''),
+            totalTracks: playlistData.tracks.length,
+            downloadedTracks: 0,
+            status: 'processing',
+            tracks: playlistData.tracks
+          };
+
+          setPlaylists(prev => [newPlaylist, ...prev]);
+          await desktopApi.library.savePlaylist(newPlaylist);
+          setActiveTab('playlists');
+          addLog('success', `Parsed Playlist name: "${playlistData.name}" containing ${playlistData.tracks.length} tracks.`);
+          await desktopApi.downloads.start({
+            url,
+            isPlaylist: true,
+            quality: settings.quality,
+            saveLocation: settings.saveLocation,
+            playlistId: newPlaylist.id,
+          });
+          return;
+        }
+
+        const metadata = data as TrackMetadata;
+        setActiveDownload({
+          id: `pending-${Date.now()}`,
+          title: metadata.title,
+          artist: metadata.artist,
+          duration: metadata.duration,
+          progress: 0,
+          speed: 'queued',
+          eta: '--:--',
+          status: 'queued',
+          thumbnailUrl: metadata.thumbnailUrl,
+        });
+        addLog('success', `Resolved metadata for "${metadata.title}" by ${metadata.artist}.`);
+        await desktopApi.downloads.start({
+          url: metadata.url || url,
+          isPlaylist: false,
+          quality: settings.quality,
+          saveLocation: settings.saveLocation,
+          metadata,
+        });
+      } catch (e: any) {
+        addLog('error', `Native download gateway failed: ${e?.message || e}`);
+        alert(e?.message || "Native download gateway failed.");
+      }
+      return;
+    }
     
     try {
       const response = await fetch('/api/metadata', {
@@ -438,9 +609,12 @@ export default function App() {
 
   const handleUpdatePlaylistStatus = (id: string, status: 'queued' | 'processing' | 'paused' | 'completed') => {
     setPlaylists(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+    desktopApi?.library.updatePlaylistStatus(id, status).catch((error) => {
+      addLog('error', `Unable to persist playlist status: ${error?.message || error}`);
+    });
     addLog('info', `Playlist state modified to: ${status}`);
 
-    if (status === 'processing') {
+    if (!desktopApi && status === 'processing') {
       const playlist = playlists.find(p => p.id === id);
       if (playlist) {
         runPlaylistQueueWorker(id, playlist.tracks);
@@ -450,7 +624,20 @@ export default function App() {
 
   const handleDeletePlaylist = (id: string) => {
     setPlaylists(prev => prev.filter(p => p.id !== id));
+    desktopApi?.library.deletePlaylist(id).catch((error) => {
+      addLog('error', `Unable to delete playlist from SQLite: ${error?.message || error}`);
+    });
     addLog('warning', `Playlist queue item index removed: ${id}`);
+  };
+
+  const handleBrowseLocation = async () => {
+    if (!desktopApi) return null;
+    try {
+      return await desktopApi.settings.chooseSaveLocation(settings.saveLocation);
+    } catch (error: any) {
+      addLog('error', `Folder picker failed: ${error?.message || error}`);
+      return null;
+    }
   };
 
   const handleOpenHelp = () => {
@@ -522,6 +709,7 @@ export default function App() {
         settings={settings}
         onClose={() => setIsSettingsOpen(false)}
         onSave={handleSaveSettings}
+        onBrowseLocation={desktopApi ? handleBrowseLocation : undefined}
       />
 
       {/* Styled Help Modal component */}

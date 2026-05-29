@@ -29,6 +29,8 @@ export interface LibraryTrack {
   audioSeed?: number; // For synth music generation
   genre: string;
   downloadedAt: string;
+  filePath?: string;
+  sourceUrl?: string;
 }
 
 export type DownloadStatus = 'queued' | 'fetching' | 'downloading' | 'converting' | 'completed' | 'failed';
@@ -58,6 +60,8 @@ export interface Playlist {
     title: string;
     artist: string;
     duration: number;
+    url?: string;
+    thumbnailUrl?: string;
   }>;
 }
 
@@ -65,5 +69,57 @@ export interface LogEntry {
   id: string;
   timestamp: string;
   type: 'info' | 'warning' | 'error' | 'success';
+  message: string;
+}
+
+export interface TrackMetadata {
+  title: string;
+  artist: string;
+  album: string;
+  duration: number;
+  genre: string;
+  thumbnailUrl: string;
+  url: string;
+}
+
+export interface PlaylistMetadata {
+  name: string;
+  tracks: Array<{
+    title: string;
+    artist: string;
+    duration: number;
+    url: string;
+    thumbnailUrl?: string;
+  }>;
+}
+
+export interface DownloadRequest {
+  url: string;
+  isPlaylist: boolean;
+  quality: Quality;
+  saveLocation: string;
+  playlistId?: string;
+  metadata?: TrackMetadata;
+}
+
+export interface DownloadProgressEvent {
+  jobId: string;
+  playlistId?: string;
+  track?: LibraryTrack;
+  title: string;
+  artist: string;
+  duration: number;
+  thumbnailUrl: string;
+  progress: number;
+  speed: string;
+  eta: string;
+  status: DownloadStatus;
+  downloadedTracks?: number;
+  totalTracks?: number;
+  error?: string;
+}
+
+export interface NativeLogEvent {
+  type: LogEntry['type'];
   message: string;
 }
