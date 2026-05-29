@@ -14,7 +14,11 @@ export function getUniqueGenres(tracks: LibraryTrack[]) {
   return [ALL_GENRES, ...Array.from(new Set(tracks.map((track) => track.genre)))];
 }
 
-export function filterLibraryTracks(tracks: LibraryTrack[], searchQuery: string, selectedGenre: string) {
+export function filterLibraryTracks(
+  tracks: LibraryTrack[],
+  searchQuery: string,
+  selectedGenre: string,
+) {
   const normalizedQuery = searchQuery.trim().toLowerCase();
 
   return tracks.filter((track) => {

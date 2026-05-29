@@ -74,7 +74,10 @@ export default function CompletedLibrary({
 
   const handleShowInFolder = async (track: LibraryTrack) => {
     const filePath = getTrackFilePath(track, settings.saveLocation);
-    onAddLog('info', `FileSystem wrapper triggered. Opening directory containing file: ${filePath}`);
+    onAddLog(
+      'info',
+      `FileSystem wrapper triggered. Opening directory containing file: ${filePath}`,
+    );
 
     if (window.carTune && track.filePath) {
       try {
@@ -98,7 +101,9 @@ export default function CompletedLibrary({
     <div className={`flex-1 flex flex-col gap-6 p-6 ${isRtl ? 'text-right' : 'text-left'}`}>
       <section className="flex flex-col md:flex-row md:items-end justify-between gap-4 shrink-0">
         <div>
-          <h2 className="font-headline-lg text-headline-lg text-on-surface font-extrabold">{t.library}</h2>
+          <h2 className="font-headline-lg text-headline-lg text-on-surface font-extrabold">
+            {t.library}
+          </h2>
           <p className="font-body-md text-sm text-on-surface-variant mt-1">{t.libraryDesc}</p>
         </div>
 
@@ -130,7 +135,10 @@ export default function CompletedLibrary({
             onChange={(event) => setSearchQuery(event.target.value)}
           />
           {searchQuery && (
-            <button onClick={() => setSearchQuery('')} className="text-on-surface-variant hover:text-on-surface">
+            <button
+              onClick={() => setSearchQuery('')}
+              className="text-on-surface-variant hover:text-on-surface"
+            >
               <span className="material-icons-span text-sm">cancel</span>
             </button>
           )}
@@ -171,8 +179,12 @@ export default function CompletedLibrary({
           </div>
         ) : (
           <div className="h-64 flex flex-col items-center justify-center border border-dashed border-outline-variant/30 rounded-xl bg-surface-container-low/35 text-center px-6">
-            <span className="material-icons-span text-4xl mb-3 text-on-surface-variant/40 animate-pulse">check_circle</span>
-            <p className="font-body-md text-sm text-on-surface-variant max-w-sm leading-relaxed">{t.noTracks}</p>
+            <span className="material-icons-span text-4xl mb-3 text-on-surface-variant/40 animate-pulse">
+              check_circle
+            </span>
+            <p className="font-body-md text-sm text-on-surface-variant max-w-sm leading-relaxed">
+              {t.noTracks}
+            </p>
           </div>
         )}
       </section>

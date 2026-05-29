@@ -39,13 +39,16 @@ const renderLibrary = (tracks: LibraryTrack[] = [track]) => {
 
 describe('CompletedLibrary', () => {
   beforeEach(() => {
-    vi.stubGlobal('Audio', vi.fn().mockImplementation((src: string) => ({
-      src,
-      pause: vi.fn(),
-      play: vi.fn().mockResolvedValue(undefined),
-      onended: null,
-      onerror: null,
-    })));
+    vi.stubGlobal(
+      'Audio',
+      vi.fn().mockImplementation((src: string) => ({
+        src,
+        pause: vi.fn(),
+        play: vi.fn().mockResolvedValue(undefined),
+        onended: null,
+        onerror: null,
+      })),
+    );
   });
 
   it('filters visible tracks by search query', () => {
@@ -54,7 +57,9 @@ describe('CompletedLibrary', () => {
       { ...track, id: 'track-2', title: 'Midnight City', artist: 'M83', genre: 'Indie' },
     ]);
 
-    fireEvent.change(screen.getByPlaceholderText('Search tracks by title, artist, or genre...'), { target: { value: 'midnight' } });
+    fireEvent.change(screen.getByPlaceholderText('Search tracks by title, artist, or genre...'), {
+      target: { value: 'midnight' },
+    });
 
     expect(screen.getByText('Midnight City')).toBeInTheDocument();
     expect(screen.queryByText('Nightcall')).not.toBeInTheDocument();
@@ -136,6 +141,11 @@ describe('CompletedLibrary', () => {
 
     expect(window.carTune.media.getUrl).toHaveBeenCalledWith(track.filePath);
     expect(Audio).toHaveBeenCalledWith(`cartune-media://${encodeURIComponent(track.filePath!)}`);
-    await waitFor(() => expect(props.onAddLog).toHaveBeenCalledWith('success', expect.stringContaining('Playing local MP3 file')));
+    await waitFor(() =>
+      expect(props.onAddLog).toHaveBeenCalledWith(
+        'success',
+        expect.stringContaining('Playing local MP3 file'),
+      ),
+    );
   });
 });

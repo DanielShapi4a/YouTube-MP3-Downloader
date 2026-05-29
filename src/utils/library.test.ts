@@ -17,12 +17,18 @@ const baseTrack: LibraryTrack = {
 
 describe('library utilities', () => {
   it('prefers persisted filePath over computed paths', () => {
-    expect(getTrackFilePath({ ...baseTrack, filePath: 'D:\\Music\\Nightcall.mp3' }, 'C:\\Music')).toBe('D:\\Music\\Nightcall.mp3');
+    expect(
+      getTrackFilePath({ ...baseTrack, filePath: 'D:\\Music\\Nightcall.mp3' }, 'C:\\Music'),
+    ).toBe('D:\\Music\\Nightcall.mp3');
   });
 
   it('computes fallback Windows and POSIX paths', () => {
-    expect(getTrackFilePath(baseTrack, 'C:\\Users\\Admin\\Music')).toBe('C:\\Users\\Admin\\Music\\Kavinsky - Nightcall.mp3');
-    expect(getTrackFilePath(baseTrack, '/Users/admin/Music')).toBe('/Users/admin/Music/Kavinsky - Nightcall.mp3');
+    expect(getTrackFilePath(baseTrack, 'C:\\Users\\Admin\\Music')).toBe(
+      'C:\\Users\\Admin\\Music\\Kavinsky - Nightcall.mp3',
+    );
+    expect(getTrackFilePath(baseTrack, '/Users/admin/Music')).toBe(
+      '/Users/admin/Music/Kavinsky - Nightcall.mp3',
+    );
   });
 
   it('filters by search text and genre', () => {
@@ -36,6 +42,9 @@ describe('library utilities', () => {
   });
 
   it('returns stable unique genre labels', () => {
-    expect(getUniqueGenres([baseTrack, { ...baseTrack, id: 'track-2' }])).toEqual(['All', 'Synthwave']);
+    expect(getUniqueGenres([baseTrack, { ...baseTrack, id: 'track-2' }])).toEqual([
+      'All',
+      'Synthwave',
+    ]);
   });
 });

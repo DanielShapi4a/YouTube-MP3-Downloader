@@ -8,20 +8,33 @@ interface SidebarProps {
   onOpenSettings: () => void;
 }
 
-export default function Sidebar({ activeTab, settings, onChangeTab, onOpenSettings }: SidebarProps) {
+export default function Sidebar({
+  activeTab,
+  settings,
+  onChangeTab,
+  onOpenSettings,
+}: SidebarProps) {
   const t = translations[settings.language];
   const isRtl = settings.language === Language.HE;
 
   return (
-    <nav className={`bg-surface-container-low border-surface-container-highest flex-shrink-0 flex flex-col p-4 w-64 h-full border-r ${isRtl ? 'order-last border-l border-r-0' : 'border-r'}`}>
-      
+    <nav
+      className={`bg-surface-container-low border-surface-container-highest flex-shrink-0 flex flex-col p-4 w-64 h-full border-r ${isRtl ? 'order-last border-l border-r-0' : 'border-r'}`}
+    >
       {/* Brand Header */}
       <div className="flex items-center gap-3 mb-10 mt-2 px-2 shrink-0">
         <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-primary-container to-error flex items-center justify-center shadow-lg">
-          <span className="material-icons-span text-on-primary-container text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>graphic_eq</span>
+          <span
+            className="material-icons-span text-on-primary-container text-xl"
+            style={{ fontVariationSettings: "'FILL' 1" }}
+          >
+            graphic_eq
+          </span>
         </div>
         <div>
-          <h1 className="font-headline-md text-[20px] font-black text-primary leading-none">{t.appTitle}</h1>
+          <h1 className="font-headline-md text-[20px] font-black text-primary leading-none">
+            {t.appTitle}
+          </h1>
           <span className="text-[11px] text-on-surface-variant leading-none">{t.version}</span>
         </div>
       </div>
@@ -39,8 +52,15 @@ export default function Sidebar({ activeTab, settings, onChangeTab, onOpenSettin
                 : 'text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
-            <span className={`material-icons-span text-[22px] ${activeTab === 'downloads' ? 'icon-fill' : ''}`} style={{ fontVariationSettings: activeTab === 'downloads' ? "'FILL' 1" : undefined }}>download</span>
-            <span className="font-label-bold text-label-bold text-sm tracking-wider">{t.navDownloads}</span>
+            <span
+              className={`material-icons-span text-[22px] ${activeTab === 'downloads' ? 'icon-fill' : ''}`}
+              style={{ fontVariationSettings: activeTab === 'downloads' ? "'FILL' 1" : undefined }}
+            >
+              download
+            </span>
+            <span className="font-label-bold text-label-bold text-sm tracking-wider">
+              {t.navDownloads}
+            </span>
           </button>
         </li>
 
@@ -55,8 +75,15 @@ export default function Sidebar({ activeTab, settings, onChangeTab, onOpenSettin
                 : 'text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
-            <span className={`material-icons-span text-[22px] ${activeTab === 'completed' ? 'icon-fill' : ''}`} style={{ fontVariationSettings: activeTab === 'completed' ? "'FILL' 1" : undefined }}>check_circle</span>
-            <span className="font-label-bold text-label-bold text-sm tracking-wider">{t.navCompleted}</span>
+            <span
+              className={`material-icons-span text-[22px] ${activeTab === 'completed' ? 'icon-fill' : ''}`}
+              style={{ fontVariationSettings: activeTab === 'completed' ? "'FILL' 1" : undefined }}
+            >
+              check_circle
+            </span>
+            <span className="font-label-bold text-label-bold text-sm tracking-wider">
+              {t.navCompleted}
+            </span>
           </button>
         </li>
 
@@ -71,8 +98,15 @@ export default function Sidebar({ activeTab, settings, onChangeTab, onOpenSettin
                 : 'text-on-surface-variant hover:bg-surface-container-high'
             }`}
           >
-            <span className={`material-icons-span text-[22px] ${activeTab === 'playlists' ? 'icon-fill' : ''}`} style={{ fontVariationSettings: activeTab === 'playlists' ? "'FILL' 1" : undefined }}>playlist_play</span>
-            <span className="font-label-bold text-label-bold text-sm tracking-wider">{t.navPlaylists}</span>
+            <span
+              className={`material-icons-span text-[22px] ${activeTab === 'playlists' ? 'icon-fill' : ''}`}
+              style={{ fontVariationSettings: activeTab === 'playlists' ? "'FILL' 1" : undefined }}
+            >
+              playlist_play
+            </span>
+            <span className="font-label-bold text-label-bold text-sm tracking-wider">
+              {t.navPlaylists}
+            </span>
           </button>
         </li>
 
@@ -84,7 +118,9 @@ export default function Sidebar({ activeTab, settings, onChangeTab, onOpenSettin
             className="w-full flex items-center gap-4 px-4 py-3 rounded-lg transition-all duration-200 text-on-surface-variant hover:bg-surface-container-high cursor-pointer"
           >
             <span className="material-icons-span text-[22px]">settings</span>
-            <span className="font-label-bold text-label-bold text-sm tracking-wider">{t.navSettings}</span>
+            <span className="font-label-bold text-label-bold text-sm tracking-wider">
+              {t.navSettings}
+            </span>
           </button>
         </li>
       </ul>
@@ -93,7 +129,6 @@ export default function Sidebar({ activeTab, settings, onChangeTab, onOpenSettin
       <div className="mt-auto pt-4 border-t border-surface-container-highest shrink-0 select-none text-center">
         <span className="text-[10px] text-on-surface-variant/40">Version 2.4.0</span>
       </div>
-
     </nav>
   );
 }

@@ -55,7 +55,9 @@ export class CarTuneDatabase {
   }
 
   getSettings(): AppSettings {
-    const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get('app') as { value: string } | undefined;
+    const row = this.db.prepare('SELECT value FROM settings WHERE key = ?').get('app') as
+      | { value: string }
+      | undefined;
     if (!row) return this.defaultSettings;
 
     try {
@@ -73,18 +75,22 @@ export class CarTuneDatabase {
   }
 
   listTracks(): LibraryTrack[] {
-    return this.db.prepare('SELECT * FROM tracks ORDER BY downloadedAt DESC, rowid DESC').all() as LibraryTrack[];
+    return this.db
+      .prepare('SELECT * FROM tracks ORDER BY downloadedAt DESC, rowid DESC')
+      .all() as LibraryTrack[];
   }
 
   saveTrack(track: LibraryTrack) {
     this.db
-      .prepare(`
+      .prepare(
+        `
         INSERT OR REPLACE INTO tracks (
           id, title, artist, album, duration, bitrate, size, thumbnailUrl, genre, downloadedAt, filePath, sourceUrl
         ) VALUES (
           @id, @title, @artist, @album, @duration, @bitrate, @size, @thumbnailUrl, @genre, @downloadedAt, @filePath, @sourceUrl
         )
-      `)
+      `,
+      )
       .run(track);
   }
 
@@ -120,13 +126,15 @@ export class CarTuneDatabase {
 
   savePlaylist(playlist: Playlist) {
     this.db
-      .prepare(`
+      .prepare(
+        `
         INSERT OR REPLACE INTO playlists (
           id, name, url, totalTracks, downloadedTracks, status, tracksJson
         ) VALUES (
           @id, @name, @url, @totalTracks, @downloadedTracks, @status, @tracksJson
         )
-      `)
+      `,
+      )
       .run({
         ...playlist,
         tracksJson: JSON.stringify(playlist.tracks),
@@ -135,7 +143,9 @@ export class CarTuneDatabase {
 
   updatePlaylistStatus(id: string, status: Playlist['status'], downloadedTracks?: number) {
     if (typeof downloadedTracks === 'number') {
-      this.db.prepare('UPDATE playlists SET status = ?, downloadedTracks = ? WHERE id = ?').run(status, downloadedTracks, id);
+      this.db
+        .prepare('UPDATE playlists SET status = ?, downloadedTracks = ? WHERE id = ?')
+        .run(status, downloadedTracks, id);
       return;
     }
     this.db.prepare('UPDATE playlists SET status = ? WHERE id = ?').run(status, id);

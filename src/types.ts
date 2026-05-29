@@ -33,7 +33,13 @@ export interface LibraryTrack {
   sourceUrl?: string;
 }
 
-export type DownloadStatus = 'queued' | 'fetching' | 'downloading' | 'converting' | 'completed' | 'failed';
+export type DownloadStatus =
+  | 'queued'
+  | 'fetching'
+  | 'downloading'
+  | 'converting'
+  | 'completed'
+  | 'failed';
 
 export interface ActiveDownload {
   id: string;

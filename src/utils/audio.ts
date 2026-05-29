@@ -26,7 +26,7 @@ class CarTuneSynthesizer {
 
       // Create a warm lowpass filter for synthwave texture
       const lowpass = this.ctx.createBiquadFilter();
-      lowpass.type = "lowpass";
+      lowpass.type = 'lowpass';
       lowpass.frequency.setValueAtTime(800, this.ctx.currentTime);
       lowpass.Q.setValueAtTime(4, this.ctx.currentTime);
       lowpass.connect(masterGain);
@@ -34,10 +34,10 @@ class CarTuneSynthesizer {
 
       // Sub-Bass drone node
       const bassOsc = this.ctx.createOscillator();
-      bassOsc.type = "sawtooth";
+      bassOsc.type = 'sawtooth';
       // Determine root note from title/artist length
       const rootChar = (title.length + artist.length) % 12;
-      const bassFreqs = [55.00, 58.27, 65.41, 73.42, 82.41, 87.31, 98.00, 110.0]; // A1, A#1, C2, etc
+      const bassFreqs = [55.0, 58.27, 65.41, 73.42, 82.41, 87.31, 98.0, 110.0]; // A1, A#1, C2, etc
       const rootFreq = bassFreqs[rootChar % bassFreqs.length];
 
       bassOsc.frequency.setValueAtTime(rootFreq, this.ctx.currentTime);
@@ -52,13 +52,13 @@ class CarTuneSynthesizer {
       const chords = [
         [1, 1.2, 1.5, 1.8], // Major 7ish spacing
         [1, 1.18, 1.5, 1.78], // Minor 7ish spacing
-        [1, 1.25, 1.5, 1.9] // Lydian feel
+        [1, 1.25, 1.5, 1.9], // Lydian feel
       ];
-      const selectedChord = chords[(title.length) % chords.length];
+      const selectedChord = chords[title.length % chords.length];
       let step = 0;
 
       const triggerArpeggio = () => {
-        if (!this.ctx || this.ctx.state === "closed" || !this.isPlaying) return;
+        if (!this.ctx || this.ctx.state === 'closed' || !this.isPlaying) return;
 
         const now = this.ctx.currentTime;
         const multiplier = selectedChord[step % selectedChord.length];
@@ -66,7 +66,7 @@ class CarTuneSynthesizer {
 
         // Oscillator for lead
         const leadOsc = this.ctx.createOscillator();
-        leadOsc.type = "triangle";
+        leadOsc.type = 'triangle';
         leadOsc.frequency.setValueAtTime(pitch, now);
 
         // Add interesting frequency glide (retro pitch sweep)
@@ -89,9 +89,8 @@ class CarTuneSynthesizer {
       // Trigger chord notes rhythmically
       triggerArpeggio();
       this.intervalId = setInterval(triggerArpeggio, 250);
-
     } catch (e) {
-      console.error("Audio Synthesis initialization failed:", e);
+      console.error('Audio Synthesis initialization failed:', e);
     }
   }
 
@@ -101,8 +100,8 @@ class CarTuneSynthesizer {
       clearInterval(this.intervalId);
       this.intervalId = null;
     }
-    
-    this.nodes.forEach(node => {
+
+    this.nodes.forEach((node) => {
       try {
         (node as any).stop?.();
         node.disconnect();

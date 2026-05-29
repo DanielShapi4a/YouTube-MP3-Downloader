@@ -15,7 +15,10 @@ declare global {
   interface Window {
     carTune?: {
       metadata: {
-        inspect(input: { url: string; isPlaylist: boolean }): Promise<TrackMetadata | PlaylistMetadata>;
+        inspect(input: {
+          url: string;
+          isPlaylist: boolean;
+        }): Promise<TrackMetadata | PlaylistMetadata>;
       };
       downloads: {
         start(input: DownloadRequest): Promise<{ jobId: string }>;

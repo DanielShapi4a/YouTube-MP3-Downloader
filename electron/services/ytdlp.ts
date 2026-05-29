@@ -70,10 +70,23 @@ export class YtDlpService {
 
   constructor(ffmpegPath: string) {
     this.ffmpegPath = ffmpegPath;
-    this.userBinPath = path.join(app.getPath('userData'), 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+    this.userBinPath = path.join(
+      app.getPath('userData'),
+      'bin',
+      process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
+    );
     this.packagedBinPath = app.isPackaged
-      ? path.join(process.resourcesPath, 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp')
-      : path.join(process.cwd(), 'resources', 'bin', process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
+      ? path.join(
+          process.resourcesPath,
+          'bin',
+          process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
+        )
+      : path.join(
+          process.cwd(),
+          'resources',
+          'bin',
+          process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
+        );
   }
 
   ensureBinary(log: LogSink) {
@@ -90,7 +103,8 @@ export class YtDlpService {
     if (!fs.existsSync(this.userBinPath)) {
       log({
         type: 'warning',
-        message: 'yt-dlp.exe is missing. Run npm run fetch:binaries before launching the Electron app.',
+        message:
+          'yt-dlp.exe is missing. Run npm run fetch:binaries before launching the Electron app.',
       });
     }
   }
@@ -115,12 +129,18 @@ export class YtDlpService {
     child.on('close', (code) => {
       log({
         type: code === 0 ? 'success' : 'warning',
-        message: code === 0 ? 'yt-dlp extractor signatures are current.' : `yt-dlp updater exited with code ${code}; continuing with staged binary.`,
+        message:
+          code === 0
+            ? 'yt-dlp extractor signatures are current.'
+            : `yt-dlp updater exited with code ${code}; continuing with staged binary.`,
       });
     });
   }
 
-  async inspect(input: { url: string; isPlaylist: boolean }): Promise<TrackMetadata | PlaylistMetadata> {
+  async inspect(input: {
+    url: string;
+    isPlaylist: boolean;
+  }): Promise<TrackMetadata | PlaylistMetadata> {
     const args = input.isPlaylist
       ? ['--dump-single-json', '--flat-playlist', input.url]
       : ['--dump-single-json', '--no-playlist', input.url];
@@ -134,7 +154,9 @@ export class YtDlpService {
           title: entry.title || 'Untitled Track',
           artist: entry.artist || entry.uploader || entry.channel || 'YouTube',
           duration: Math.round(Number(entry.duration || 0)),
-          url: entry.url?.startsWith('http') ? entry.url : `https://www.youtube.com/watch?v=${entry.id || entry.url}`,
+          url: entry.url?.startsWith('http')
+            ? entry.url
+            : `https://www.youtube.com/watch?v=${entry.id || entry.url}`,
           thumbnailUrl: entry.thumbnail || entry.thumbnails?.at?.(-1)?.url || '',
         })),
       };
@@ -151,14 +173,19 @@ export class YtDlpService {
     updatePlaylist?: (downloadedTracks: number, completed: boolean) => void,
   ) {
     const jobId = `job-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-    const playlistControl = request.isPlaylist ? this.createPlaylistControl(request.playlistId, jobId) : undefined;
+    const playlistControl = request.isPlaylist
+      ? this.createPlaylistControl(request.playlistId, jobId)
+      : undefined;
 
     queueMicrotask(async () => {
       try {
         fs.mkdirSync(request.saveLocation, { recursive: true });
 
         if (request.isPlaylist) {
-          const playlist = (await this.inspect({ url: request.url, isPlaylist: true })) as PlaylistMetadata;
+          const playlist = (await this.inspect({
+            url: request.url,
+            isPlaylist: true,
+          })) as PlaylistMetadata;
           let completed = 0;
 
           for (let index = 0; index < playlist.tracks.length; index += 1) {
@@ -178,7 +205,13 @@ export class YtDlpService {
 
             let track: LibraryTrack;
             try {
-              track = await this.downloadOne(jobId, { ...request, url: item.url, metadata }, metadata, emitProgress, log);
+              track = await this.downloadOne(
+                jobId,
+                { ...request, url: item.url, metadata },
+                metadata,
+                emitProgress,
+                log,
+              );
             } catch (error) {
               if (error instanceof PausedDownloadError) {
                 index -= 1;
@@ -210,7 +243,9 @@ export class YtDlpService {
           return;
         }
 
-        const metadata = request.metadata || ((await this.inspect({ url: request.url, isPlaylist: false })) as TrackMetadata);
+        const metadata =
+          request.metadata ||
+          ((await this.inspect({ url: request.url, isPlaylist: false })) as TrackMetadata);
         const track = await this.downloadOne(jobId, request, metadata, emitProgress, log);
         saveTrack(track);
         emitProgress({
@@ -257,7 +292,9 @@ export class YtDlpService {
   }
 
   cancel(jobId: string) {
-    const playlistControl = Array.from(this.playlistControls.values()).find((control) => control.currentJobId === jobId);
+    const playlistControl = Array.from(this.playlistControls.values()).find(
+      (control) => control.currentJobId === jobId,
+    );
     if (playlistControl) {
       playlistControl.cancelled = true;
       playlistControl.paused = false;
@@ -298,7 +335,12 @@ export class YtDlpService {
     emitProgress: ProgressSink,
     log: LogSink,
   ): Promise<LibraryTrack> {
-    const tempDir = path.join(app.getPath('temp'), 'CarTune', jobId, Math.random().toString(16).slice(2));
+    const tempDir = path.join(
+      app.getPath('temp'),
+      'CarTune',
+      jobId,
+      Math.random().toString(16).slice(2),
+    );
     fs.mkdirSync(tempDir, { recursive: true });
 
     emitProgress({
@@ -350,7 +392,9 @@ export class YtDlpService {
     );
 
     const files = fs.readdirSync(tempDir).map((file) => path.join(tempDir, file));
-    const sourceAudio = files.find((file) => /^source\./.test(path.basename(file)) && !/\.(jpg|jpeg|png|webp)$/i.test(file));
+    const sourceAudio = files.find(
+      (file) => /^source\./.test(path.basename(file)) && !/\.(jpg|jpeg|png|webp)$/i.test(file),
+    );
     const coverArt = files.find((file) => /\.(jpg|jpeg|png)$/i.test(file));
 
     if (!sourceAudio) {
@@ -466,7 +510,12 @@ export class YtDlpService {
     });
   }
 
-  private runProcess(command: string, args: string[], onLine: (line: string) => void, jobId: string) {
+  private runProcess(
+    command: string,
+    args: string[],
+    onLine: (line: string) => void,
+    jobId: string,
+  ) {
     return new Promise<void>((resolve, reject) => {
       const child = spawn(command, args, { windowsHide: true });
       this.jobs.set(jobId, child);
@@ -489,7 +538,9 @@ export class YtDlpService {
           return;
         }
 
-        const control = Array.from(this.playlistControls.values()).find((item) => item.currentJobId === jobId);
+        const control = Array.from(this.playlistControls.values()).find(
+          (item) => item.currentJobId === jobId,
+        );
         if (control?.cancelled) {
           reject(new CancelledDownloadError());
           return;

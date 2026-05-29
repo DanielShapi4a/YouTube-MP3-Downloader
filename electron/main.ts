@@ -1,7 +1,14 @@
 import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
-import type { AppSettings, DownloadProgressEvent, DownloadRequest, LibraryTrack, NativeLogEvent, Playlist } from '../src/types';
+import type {
+  AppSettings,
+  DownloadProgressEvent,
+  DownloadRequest,
+  LibraryTrack,
+  NativeLogEvent,
+  Playlist,
+} from '../src/types';
 import { CarTuneDatabase } from './services/database';
 import { YtDlpService } from './services/ytdlp';
 
@@ -58,7 +65,10 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 app.whenReady().then(async () => {
-  db = new CarTuneDatabase(path.join(app.getPath('userData'), 'cartune.sqlite'), defaultSaveLocation());
+  db = new CarTuneDatabase(
+    path.join(app.getPath('userData'), 'cartune.sqlite'),
+    defaultSaveLocation(),
+  );
 
   if (!ffmpegPath) {
     throw new Error('ffmpeg-static did not resolve an ffmpeg binary.');
@@ -71,7 +81,10 @@ app.whenReady().then(async () => {
     const filePath = decodeURIComponent(encodedPath);
 
     if (!isAllowedMediaPath(filePath)) {
-      emitLog({ type: 'warning', message: `Blocked media protocol request for unregistered file: ${filePath}` });
+      emitLog({
+        type: 'warning',
+        message: `Blocked media protocol request for unregistered file: ${filePath}`,
+      });
       callback({ error: -10 });
       return;
     }
@@ -84,7 +97,10 @@ app.whenReady().then(async () => {
 
   emitLog({ type: 'success', message: 'CarTune MP3 desktop bridge initialized.' });
   emitLog({ type: 'success', message: `FFmpeg binary loaded: ${ffmpegPath}` });
-  emitLog({ type: 'info', message: `SQLite library opened: ${path.join(app.getPath('userData'), 'cartune.sqlite')}` });
+  emitLog({
+    type: 'info',
+    message: `SQLite library opened: ${path.join(app.getPath('userData'), 'cartune.sqlite')}`,
+  });
   ytDlp.updateSignatures(emitLog);
 });
 
@@ -113,7 +129,11 @@ function registerIpcHandlers() {
       (track: LibraryTrack) => db.saveTrack(track),
       request.playlistId
         ? (downloadedTracks, completed) => {
-            db.updatePlaylistStatus(request.playlistId!, completed ? 'completed' : 'processing', downloadedTracks);
+            db.updatePlaylistStatus(
+              request.playlistId!,
+              completed ? 'completed' : 'processing',
+              downloadedTracks,
+            );
           }
         : undefined,
     );
@@ -129,15 +149,18 @@ function registerIpcHandlers() {
   ipcMain.handle('library:clearTracks', () => db.clearTracks());
   ipcMain.handle('library:listPlaylists', () => db.listPlaylists());
   ipcMain.handle('library:savePlaylist', (_event, playlist: Playlist) => db.savePlaylist(playlist));
-  ipcMain.handle('library:updatePlaylistStatus', (_event, id: string, status: Playlist['status']) => {
-    if (status === 'paused') {
-      ytDlp.pausePlaylist(id);
-    } else if (status === 'processing') {
-      ytDlp.resumePlaylist(id);
-    }
+  ipcMain.handle(
+    'library:updatePlaylistStatus',
+    (_event, id: string, status: Playlist['status']) => {
+      if (status === 'paused') {
+        ytDlp.pausePlaylist(id);
+      } else if (status === 'processing') {
+        ytDlp.resumePlaylist(id);
+      }
 
-    db.updatePlaylistStatus(id, status);
-  });
+      db.updatePlaylistStatus(id, status);
+    },
+  );
   ipcMain.handle('library:deletePlaylist', (_event, id: string) => db.deletePlaylist(id));
 
   ipcMain.handle('settings:get', () => db.getSettings());
@@ -165,5 +188,9 @@ function registerIpcHandlers() {
 
 function isAllowedMediaPath(filePath: string) {
   const requestedPath = path.normalize(filePath).toLowerCase();
-  return db.listTracks().some((track) => track.filePath && path.normalize(track.filePath).toLowerCase() === requestedPath);
+  return db
+    .listTracks()
+    .some(
+      (track) => track.filePath && path.normalize(track.filePath).toLowerCase() === requestedPath,
+    );
 }

@@ -11,7 +11,10 @@ describe('CarTuneDatabase', () => {
 
   beforeEach(() => {
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'cartune-db-test-'));
-    database = new CarTuneDatabase(path.join(tempDir, 'cartune.sqlite'), path.join(tempDir, 'Music'));
+    database = new CarTuneDatabase(
+      path.join(tempDir, 'cartune.sqlite'),
+      path.join(tempDir, 'Music'),
+    );
   });
 
   afterEach(() => {
@@ -78,8 +81,18 @@ describe('CarTuneDatabase', () => {
       downloadedTracks: 0,
       status: 'processing',
       tracks: [
-        { title: 'Track One', artist: 'Artist One', duration: 180, url: 'https://youtube.example/1' },
-        { title: 'Track Two', artist: 'Artist Two', duration: 200, url: 'https://youtube.example/2' },
+        {
+          title: 'Track One',
+          artist: 'Artist One',
+          duration: 180,
+          url: 'https://youtube.example/1',
+        },
+        {
+          title: 'Track Two',
+          artist: 'Artist Two',
+          duration: 200,
+          url: 'https://youtube.example/2',
+        },
       ],
     };
 
