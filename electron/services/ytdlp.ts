@@ -14,6 +14,25 @@ import type {
 type LogSink = (event: NativeLogEvent) => void;
 type ProgressSink = (event: DownloadProgressEvent) => void;
 
+interface PlaylistControl {
+  paused: boolean;
+  cancelled: boolean;
+  currentJobId: string;
+  resume?: () => void;
+}
+
+class PausedDownloadError extends Error {
+  constructor() {
+    super('Playlist download paused.');
+  }
+}
+
+class CancelledDownloadError extends Error {
+  constructor() {
+    super('Download cancelled.');
+  }
+}
+
 const INVALID_FILE_CHARS = /[<>:"/\\|?*\u0000-\u001F]/g;
 
 const cleanSegment = (value: string, fallback: string) => {
@@ -44,6 +63,7 @@ const parseFfmpegTime = (line: string, duration: number) => {
 
 export class YtDlpService {
   private jobs = new Map<string, ChildProcessWithoutNullStreams>();
+  private playlistControls = new Map<string, PlaylistControl>();
   private ffmpegPath: string;
   private userBinPath: string;
   private packagedBinPath: string;
@@ -131,6 +151,7 @@ export class YtDlpService {
     updatePlaylist?: (downloadedTracks: number, completed: boolean) => void,
   ) {
     const jobId = `job-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const playlistControl = request.isPlaylist ? this.createPlaylistControl(request.playlistId, jobId) : undefined;
 
     queueMicrotask(async () => {
       try {
@@ -140,7 +161,11 @@ export class YtDlpService {
           const playlist = (await this.inspect({ url: request.url, isPlaylist: true })) as PlaylistMetadata;
           let completed = 0;
 
-          for (const item of playlist.tracks) {
+          for (let index = 0; index < playlist.tracks.length; index += 1) {
+            await this.waitIfPaused(playlistControl);
+            if (playlistControl?.cancelled) throw new CancelledDownloadError();
+
+            const item = playlist.tracks[index];
             const metadata: TrackMetadata = {
               title: item.title,
               artist: item.artist,
@@ -150,7 +175,19 @@ export class YtDlpService {
               thumbnailUrl: item.thumbnailUrl || '',
               url: item.url,
             };
-            const track = await this.downloadOne(jobId, { ...request, url: item.url, metadata }, metadata, emitProgress, log);
+
+            let track: LibraryTrack;
+            try {
+              track = await this.downloadOne(jobId, { ...request, url: item.url, metadata }, metadata, emitProgress, log);
+            } catch (error) {
+              if (error instanceof PausedDownloadError) {
+                index -= 1;
+                await this.waitIfPaused(playlistControl);
+                continue;
+              }
+              throw error;
+            }
+
             saveTrack(track);
             completed += 1;
             updatePlaylist?.(completed, completed === playlist.tracks.length);
@@ -189,6 +226,11 @@ export class YtDlpService {
           status: 'completed',
         });
       } catch (error: any) {
+        if (error instanceof CancelledDownloadError) {
+          log({ type: 'warning', message: error.message });
+          return;
+        }
+
         log({ type: 'error', message: error?.message || 'Download failed.' });
         emitProgress({
           jobId,
@@ -205,6 +247,9 @@ export class YtDlpService {
         });
       } finally {
         this.jobs.delete(jobId);
+        if (request.playlistId) {
+          this.playlistControls.delete(request.playlistId);
+        }
       }
     });
 
@@ -212,11 +257,38 @@ export class YtDlpService {
   }
 
   cancel(jobId: string) {
+    const playlistControl = Array.from(this.playlistControls.values()).find((control) => control.currentJobId === jobId);
+    if (playlistControl) {
+      playlistControl.cancelled = true;
+      playlistControl.paused = false;
+      playlistControl.resume?.();
+    }
+
     const child = this.jobs.get(jobId);
     if (child) {
       child.kill();
       this.jobs.delete(jobId);
     }
+  }
+
+  pausePlaylist(playlistId: string) {
+    const control = this.playlistControls.get(playlistId);
+    if (!control || control.cancelled) return false;
+
+    control.paused = true;
+    const child = this.jobs.get(control.currentJobId);
+    child?.kill();
+    return true;
+  }
+
+  resumePlaylist(playlistId: string) {
+    const control = this.playlistControls.get(playlistId);
+    if (!control || control.cancelled) return false;
+
+    control.paused = false;
+    control.resume?.();
+    control.resume = undefined;
+    return true;
   }
 
   private async downloadOne(
@@ -412,9 +484,43 @@ export class YtDlpService {
       child.stderr.on('data', consume);
       child.on('error', reject);
       child.on('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`${path.basename(command)} exited with code ${code}`));
+        if (code === 0) {
+          resolve();
+          return;
+        }
+
+        const control = Array.from(this.playlistControls.values()).find((item) => item.currentJobId === jobId);
+        if (control?.cancelled) {
+          reject(new CancelledDownloadError());
+          return;
+        }
+        if (control?.paused) {
+          reject(new PausedDownloadError());
+          return;
+        }
+
+        reject(new Error(`${path.basename(command)} exited with code ${code}`));
       });
+    });
+  }
+
+  private createPlaylistControl(playlistId: string | undefined, jobId: string) {
+    if (!playlistId) return undefined;
+
+    const control: PlaylistControl = {
+      paused: false,
+      cancelled: false,
+      currentJobId: jobId,
+    };
+    this.playlistControls.set(playlistId, control);
+    return control;
+  }
+
+  private waitIfPaused(control: PlaylistControl | undefined) {
+    if (!control?.paused) return Promise.resolve();
+
+    return new Promise<void>((resolve) => {
+      control.resume = resolve;
     });
   }
 }

@@ -129,7 +129,15 @@ function registerIpcHandlers() {
   ipcMain.handle('library:clearTracks', () => db.clearTracks());
   ipcMain.handle('library:listPlaylists', () => db.listPlaylists());
   ipcMain.handle('library:savePlaylist', (_event, playlist: Playlist) => db.savePlaylist(playlist));
-  ipcMain.handle('library:updatePlaylistStatus', (_event, id: string, status: Playlist['status']) => db.updatePlaylistStatus(id, status));
+  ipcMain.handle('library:updatePlaylistStatus', (_event, id: string, status: Playlist['status']) => {
+    if (status === 'paused') {
+      ytDlp.pausePlaylist(id);
+    } else if (status === 'processing') {
+      ytDlp.resumePlaylist(id);
+    }
+
+    db.updatePlaylistStatus(id, status);
+  });
   ipcMain.handle('library:deletePlaylist', (_event, id: string) => db.deletePlaylist(id));
 
   ipcMain.handle('settings:get', () => db.getSettings());

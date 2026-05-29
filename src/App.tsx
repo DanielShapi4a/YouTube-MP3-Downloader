@@ -155,6 +155,8 @@ export default function App() {
   // Track intervals for download simulation
   const downloadTimerRef = useRef<any>(null);
   const playlistTimerRef = useRef<any>(null);
+  const nativeJobIdRef = useRef<string | null>(null);
+  const pendingNativeCancelRef = useRef<boolean>(false);
 
   // Sync to local storage
   useEffect(() => {
@@ -237,9 +239,13 @@ export default function App() {
         const withoutDuplicate = prev.filter(track => track.id !== event.track!.id);
         return [event.track!, ...withoutDuplicate];
       });
+      if (!event.playlistId || event.downloadedTracks === event.totalTracks) {
+        nativeJobIdRef.current = null;
+      }
       setActiveDownload(null);
       addLog('success', `CarTune MP3 successfully outputted to: ${event.track.filePath}`);
     } else if (event.status === 'failed') {
+      nativeJobIdRef.current = null;
       setActiveDownload(null);
       addLog('error', event.error || `Download failed for ${event.title}`);
     } else {
@@ -300,9 +306,15 @@ export default function App() {
 
   const handleCancelDownload = (id: string) => {
     if (desktopApi) {
-      desktopApi.downloads.cancel(id).catch((error) => {
-        addLog('error', `Unable to cancel native download: ${error?.message || error}`);
-      });
+      const nativeJobId = nativeJobIdRef.current;
+      if (nativeJobId) {
+        desktopApi.downloads.cancel(nativeJobId).catch((error) => {
+          addLog('error', `Unable to cancel native download: ${error?.message || error}`);
+        });
+        nativeJobIdRef.current = null;
+      } else {
+        pendingNativeCancelRef.current = true;
+      }
     }
 
     if (downloadTimerRef.current) {
@@ -452,13 +464,20 @@ export default function App() {
           await desktopApi.library.savePlaylist(newPlaylist);
           setActiveTab('playlists');
           addLog('success', `Parsed Playlist name: "${playlistData.name}" containing ${playlistData.tracks.length} tracks.`);
-          await desktopApi.downloads.start({
+          const { jobId } = await desktopApi.downloads.start({
             url,
             isPlaylist: true,
             quality: settings.quality,
             saveLocation: settings.saveLocation,
             playlistId: newPlaylist.id,
           });
+          if (pendingNativeCancelRef.current) {
+            pendingNativeCancelRef.current = false;
+            await desktopApi.downloads.cancel(jobId);
+            return;
+          }
+
+          nativeJobIdRef.current = jobId;
           return;
         }
 
@@ -475,13 +494,21 @@ export default function App() {
           thumbnailUrl: metadata.thumbnailUrl,
         });
         addLog('success', `Resolved metadata for "${metadata.title}" by ${metadata.artist}.`);
-        await desktopApi.downloads.start({
+        const { jobId } = await desktopApi.downloads.start({
           url: metadata.url || url,
           isPlaylist: false,
           quality: settings.quality,
           saveLocation: settings.saveLocation,
           metadata,
         });
+        if (pendingNativeCancelRef.current) {
+          pendingNativeCancelRef.current = false;
+          await desktopApi.downloads.cancel(jobId);
+          return;
+        }
+
+        nativeJobIdRef.current = jobId;
+        setActiveDownload(prev => prev && prev.id.startsWith('pending-') ? { ...prev, id: jobId } : prev);
       } catch (e: any) {
         addLog('error', `Native download gateway failed: ${e?.message || e}`);
         alert(e?.message || "Native download gateway failed.");
