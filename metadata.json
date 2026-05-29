@@ -1,0 +1,6 @@
+{
+  "name": "CarTune MP3",
+  "description": "Sleek, tactile dark-mode YouTube to MP3 batch downloader and library manager for car USB players. Features high-fidelity downloads, advanced settings, multi-language support (English, Russian, Hebrew), and a responsive technical player dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
