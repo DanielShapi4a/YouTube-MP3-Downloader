@@ -6,7 +6,6 @@ import {
   Playlist,
   LogEntry,
   Language,
-  Quality,
   TrackMetadata,
   PlaylistMetadata,
   DownloadProgressEvent,
@@ -18,86 +17,16 @@ import CompletedLibrary from './components/CompletedLibrary';
 import PlaylistManager from './components/PlaylistManager';
 import SettingsModal from './components/SettingsModal';
 import HelpModal from './components/HelpModal';
-
-// Setup standard, professional mockup tracks matching reference designs
-const INITIAL_TRACKS: LibraryTrack[] = [
-  {
-    id: "track-1",
-    title: "Midnight City (Extended Mix)",
-    artist: "M83",
-    album: "Hurry Up, We're Dreaming",
-    duration: 243,
-    bitrate: "320",
-    size: "12.4 MB",
-    thumbnailUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuCTcAcXcHPqipsxaWMoWF3TIP6JBMj31jsnkvUzvoaRLtvri9zgrrgSW85M6fPCV9twwGzWUR3NKujjkcrMLY3-OxCf-p-hwH635yaSW-OtWTgHgq6UuSSGUJpDuwuDlllpIVx_KNULt7t2jO3mn0FLX_isajgebu-3uKBD0O3Qwik_G4G4dSvEgBA-nEOpqEn3hU8HTpGBAO3r4TyvVYWQTE3eEfMZbgImdqg0O4wu-tsn82MhnizQwTstidviok_NPqVF7gRgJWA",
-    genre: "Synthwave",
-    downloadedAt: new Date().toLocaleDateString()
-  },
-  {
-    id: "track-2",
-    title: "Strobe (Radio Edit)",
-    artist: "deadmau5",
-    album: "For Lack of a Better Name",
-    duration: 384,
-    bitrate: "320",
-    size: "45.2 MB",
-    thumbnailUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuBOg4r5tS9ilh4L8mvzP1tWx_Ve70etKmpZhUowHMXA7d-OFB92CRQWl-Ne-esW5bv8DM1pZhEvoydN4brvi92DAL8mNqHWtGBvxaRIPk16sSE0Huh-TXupf96dh3pVn73VuWa05bgotlPCtIAhQZL9bGaPQ0tI2lx3Il_5Hsv-2QbZTEy1PvFhkBJUQ2uoYCbLUveJK5N0m1J5UjVzzcStHkxAGtNe14DqKKo30ue5aDvILFgt6Sh02pBABjycRBR60RGyk2ybvLI",
-    genre: "Electronic",
-    downloadedAt: new Date().toLocaleDateString()
-  },
-  {
-    id: "track-3",
-    title: "Nightcall",
-    artist: "Kavinsky",
-    album: "Outrun",
-    duration: 258,
-    bitrate: "320",
-    size: "10.1 MB",
-    thumbnailUrl: "https://lh3.googleusercontent.com/aida-public/AB6AXuAvFnRo-mWDJSbjYc6pX5pZ07aC8wT7bh0d8oOOn-xpOT-WEJlQ5pYStsJXdrglatwfDAZWHPeTe12Bip3jSOxh3NpB8EuzNRMImCe6XD6sJASKxK1bN03WBapmjCshiVLS1IV8Ce1TZM0_SllkYMLR9VbZLAyc4DvY0Ntv8ivNko8LdOnZBiv9jdYCjDh7Rv_9zxzLmpFcy3K3zCMoT6vZgMU-skEVe94ax9soVxkH_SZg0VGPo_AG4jw7bEvuUZrYw5bQI8-QdlM",
-    genre: "Retrowave",
-    downloadedAt: new Date().toLocaleDateString()
-  }
-];
-
-const INITIAL_PLAYLISTS: Playlist[] = [
-  {
-    id: "playlist-1",
-    name: "Lo-Fi Study Beats 2026",
-    url: "youtube.com/playlist?list=PL_lofi_study_2026",
-    totalTracks: 120,
-    downloadedTracks: 45,
-    status: "processing",
-    tracks: [
-      { title: "Dreaming Awake", artist: "Lofi Girl", duration: 144 },
-      { title: "Midnight Coffee", artist: "ChilledCow", duration: 152 },
-      { title: "Afternoon Breeze", artist: "Focus Mind", duration: 180 }
-    ]
-  },
-  {
-    id: "playlist-2",
-    name: "Synthwave Retrowave Mix",
-    url: "youtube.com/playlist?list=PL_retro_synth_mix",
-    totalTracks: 42,
-    downloadedTracks: 0,
-    status: "queued",
-    tracks: [
-      { title: "Laser Highway", artist: "Miami Nights 1984", duration: 252 },
-      { title: "Sunset Cruise", artist: "The Midnight", duration: 212 }
-    ]
-  },
-  {
-    id: "playlist-3",
-    name: "Tech Podcast Backlog",
-    url: "youtube.com/playlist?list=PL_tech_backlog",
-    totalTracks: 15,
-    downloadedTracks: 15,
-    status: "completed",
-    tracks: [
-      { title: "Future of AI", artist: "Tech Talk", duration: 1200 },
-      { title: "Web Dev in 2026", artist: "Code Cast", duration: 1500 }
-    ]
-  }
-];
+import { DEFAULT_SETTINGS, INITIAL_PLAYLISTS, createInitialTracks } from './data/initialData';
+import { readStoredJson, writeStoredJson } from './services/localStorageStore';
+import {
+  createCompletedTrack,
+  createMockActiveDownload,
+  createPlaylistCompletedTrack,
+  getMockProgressTick,
+  resolveMockThumbnail,
+} from './services/webDownloadSimulator';
+import { getErrorMessage } from './utils/errors';
 
 export default function App() {
   const desktopApi = window.carTune;
@@ -105,45 +34,23 @@ export default function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [isHelpOpen, setIsHelpOpen] = useState<boolean>(false);
   const [isDesktopReady, setIsDesktopReady] = useState<boolean>(!desktopApi);
-  
+
   // App Settings State
   const [settings, setSettings] = useState<AppSettings>(() => {
-    const saved = localStorage.getItem('cartune_settings');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return {
-      saveLocation: "C:\\Users\\Admin\\Music\\CarTune",
-      language: Language.EN,
-      quality: Quality.KBPS_320,
-      advancedLogging: true
-    };
+    if (desktopApi) return DEFAULT_SETTINGS;
+    return readStoredJson('cartune_settings', DEFAULT_SETTINGS);
   });
 
   // Track Library State
   const [tracks, setTracks] = useState<LibraryTrack[]>(() => {
     if (desktopApi) return [];
-    const saved = localStorage.getItem('cartune_tracks');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return INITIAL_TRACKS;
+    return readStoredJson('cartune_tracks', createInitialTracks());
   });
 
   // Playlists State
   const [playlists, setPlaylists] = useState<Playlist[]>(() => {
     if (desktopApi) return [];
-    const saved = localStorage.getItem('cartune_playlists');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {}
-    }
-    return INITIAL_PLAYLISTS;
+    return readStoredJson('cartune_playlists', INITIAL_PLAYLISTS);
   });
 
   // Active Downloads
@@ -153,8 +60,8 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
 
   // Track intervals for download simulation
-  const downloadTimerRef = useRef<any>(null);
-  const playlistTimerRef = useRef<any>(null);
+  const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const playlistTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nativeJobIdRef = useRef<string | null>(null);
   const pendingNativeCancelRef = useRef<boolean>(false);
 
@@ -163,11 +70,11 @@ export default function App() {
     if (desktopApi) {
       if (isDesktopReady) {
         desktopApi.settings.save(settings).catch((error) => {
-          addLog('error', `Failed to persist settings: ${error?.message || error}`);
+          addLog('error', `Failed to persist settings: ${getErrorMessage(error)}`);
         });
       }
     } else {
-      localStorage.setItem('cartune_settings', JSON.stringify(settings));
+      writeStoredJson('cartune_settings', settings);
     }
     // Set Document Direction based on Locale
     document.documentElement.dir = settings.language === Language.HE ? 'rtl' : 'ltr';
@@ -176,13 +83,13 @@ export default function App() {
 
   useEffect(() => {
     if (!desktopApi) {
-      localStorage.setItem('cartune_tracks', JSON.stringify(tracks));
+      writeStoredJson('cartune_tracks', tracks);
     }
   }, [tracks, desktopApi]);
 
   useEffect(() => {
     if (!desktopApi) {
-      localStorage.setItem('cartune_playlists', JSON.stringify(playlists));
+      writeStoredJson('cartune_playlists', playlists);
     }
   }, [playlists, desktopApi]);
 
@@ -198,23 +105,27 @@ export default function App() {
 
     let isMounted = true;
     const unsubLog = desktopApi.downloads.onLog((event) => addLog(event.type, event.message));
-    const unsubProgress = desktopApi.downloads.onProgress((event) => handleNativeDownloadProgress(event));
+    const unsubProgress = desktopApi.downloads.onProgress((event) =>
+      handleNativeDownloadProgress(event),
+    );
 
     Promise.all([
       desktopApi.settings.get(),
       desktopApi.library.listTracks(),
       desktopApi.library.listPlaylists(),
-    ]).then(([savedSettings, savedTracks, savedPlaylists]) => {
-      if (!isMounted) return;
-      setSettings(savedSettings);
-      setTracks(savedTracks);
-      setPlaylists(savedPlaylists);
-      setIsDesktopReady(true);
-      addLog('success', 'Desktop library restored from SQLite.');
-    }).catch((error) => {
-      addLog('error', `Desktop state hydration failed: ${error?.message || error}`);
-      setIsDesktopReady(true);
-    });
+    ])
+      .then(([savedSettings, savedTracks, savedPlaylists]) => {
+        if (!isMounted) return;
+        setSettings(savedSettings);
+        setTracks(savedTracks);
+        setPlaylists(savedPlaylists);
+        setIsDesktopReady(true);
+        addLog('success', 'Desktop library restored from SQLite.');
+      })
+      .catch((error) => {
+        addLog('error', `Desktop state hydration failed: ${getErrorMessage(error)}`);
+        setIsDesktopReady(true);
+      });
 
     return () => {
       isMounted = false;
@@ -228,15 +139,15 @@ export default function App() {
       id: `log-${Date.now()}-${Math.random()}`,
       timestamp: new Date().toLocaleTimeString(),
       type,
-      message
+      message,
     };
-    setLogs(prev => [...prev.slice(-99), newLog]); // Keep last 100 logs
+    setLogs((prev) => [...prev.slice(-99), newLog]); // Keep last 100 logs
   };
 
   function handleNativeDownloadProgress(event: DownloadProgressEvent) {
     if (event.status === 'completed' && event.track) {
-      setTracks(prev => {
-        const withoutDuplicate = prev.filter(track => track.id !== event.track!.id);
+      setTracks((prev) => {
+        const withoutDuplicate = prev.filter((track) => track.id !== event.track!.id);
         return [event.track!, ...withoutDuplicate];
       });
       if (!event.playlistId || event.downloadedTracks === event.totalTracks) {
@@ -265,16 +176,25 @@ export default function App() {
     }
 
     if (event.playlistId && typeof event.downloadedTracks === 'number') {
-      setPlaylists(prev => prev.map(playlist => playlist.id === event.playlistId ? {
-        ...playlist,
-        downloadedTracks: event.downloadedTracks!,
-        status: event.status === 'completed' && event.downloadedTracks === playlist.totalTracks ? 'completed' : 'processing',
-      } : playlist));
+      setPlaylists((prev) =>
+        prev.map((playlist) =>
+          playlist.id === event.playlistId
+            ? {
+                ...playlist,
+                downloadedTracks: event.downloadedTracks!,
+                status:
+                  event.status === 'completed' && event.downloadedTracks === playlist.totalTracks
+                    ? 'completed'
+                    : 'processing',
+              }
+            : playlist,
+        ),
+      );
     }
   }
 
   const handleUpdateLanguage = (lang: Language) => {
-    setSettings(prev => ({ ...prev, language: lang }));
+    setSettings((prev) => ({ ...prev, language: lang }));
     addLog('info', `Language orientation changed to: ${lang}`);
   };
 
@@ -288,19 +208,19 @@ export default function App() {
       try {
         await desktopApi.shell.openFolder(settings.saveLocation);
         addLog('info', `Opened output folder: ${settings.saveLocation}`);
-      } catch (error: any) {
-        addLog('error', `Unable to open output folder: ${error?.message || error}`);
+      } catch (error: unknown) {
+        addLog('error', `Unable to open output folder: ${getErrorMessage(error)}`);
       }
       return;
     }
 
     addLog('info', `Simulating system folder call: ${settings.saveLocation}`);
     alert(
-      settings.language === Language.HE 
-        ? `תיקיית השירים נפתחה במיקום:\n${settings.saveLocation}` 
-        : settings.language === Language.RU 
-          ? `Проводник запущен по адресу:\n${settings.saveLocation}` 
-          : `System explorer triggered successfully at directory:\n${settings.saveLocation}`
+      settings.language === Language.HE
+        ? `תיקיית השירים נפתחה במיקום:\n${settings.saveLocation}`
+        : settings.language === Language.RU
+          ? `Проводник запущен по адресу:\n${settings.saveLocation}`
+          : `System explorer triggered successfully at directory:\n${settings.saveLocation}`,
     );
   };
 
@@ -309,7 +229,7 @@ export default function App() {
       const nativeJobId = nativeJobIdRef.current;
       if (nativeJobId) {
         desktopApi.downloads.cancel(nativeJobId).catch((error) => {
-          addLog('error', `Unable to cancel native download: ${error?.message || error}`);
+          addLog('error', `Unable to cancel native download: ${getErrorMessage(error)}`);
         });
         nativeJobIdRef.current = null;
       } else {
@@ -326,48 +246,37 @@ export default function App() {
   };
 
   const handleClearAllTracks = () => {
-    if (confirm(settings.language === Language.HE ? "האם למחוק את כל השירים מספריית המוזיקה?" : settings.language === Language.RU ? "Вы уверены, что хотите удалить ВСЕ песни?" : "Are you sure you want to delete ALL downloaded songs?")) {
+    if (
+      confirm(
+        settings.language === Language.HE
+          ? 'האם למחוק את כל השירים מספריית המוזיקה?'
+          : settings.language === Language.RU
+            ? 'Вы уверены, что хотите удалить ВСЕ песни?'
+            : 'Are you sure you want to delete ALL downloaded songs?',
+      )
+    ) {
       setTracks([]);
       desktopApi?.library.clearTracks().catch((error) => {
-        addLog('error', `Unable to clear SQLite library: ${error?.message || error}`);
+        addLog('error', `Unable to clear SQLite library: ${getErrorMessage(error)}`);
       });
       addLog('warning', 'Completed library history wiped.');
     }
   };
 
   const handleDeleteTrack = (id: string) => {
-    setTracks(prev => prev.filter(t => t.id !== id));
+    setTracks((prev) => prev.filter((t) => t.id !== id));
     desktopApi?.library.deleteTrack(id).catch((error) => {
-      addLog('error', `Unable to delete track from SQLite: ${error?.message || error}`);
+      addLog('error', `Unable to delete track from SQLite: ${getErrorMessage(error)}`);
     });
     addLog('info', `Completed track removed from local indexes: ${id}`);
   };
 
   // Launch simulated downloading process from metadata
-  const startSingleTrackDownload = (trackMeta: any) => {
+  const startSingleTrackDownload = (trackMeta: TrackMetadata) => {
     if (activeDownload) return;
 
-    // Default cover art based on Title keywords
-    let calculatedThumbnail = "https://lh3.googleusercontent.com/aida-public/AB6AXuC7xzgbTIbblwEno73Er_I-A18Ng545U8gL8IQnYJmSN4-AZsvsNxS5J9ByJhrPH9m8kViwUO2Bba8fWIzxwh4zoRLpFAnNBmT9SsT_Slwlq7UPab0LLz8agB_iCCymEguAzyGr68S1N0p03V13QHtXjtb6Ka582qsCyyLr9AF3tlMwow6Q0nr49spU48mfdIk32wgbAfTTJb8OJcoVRbwiT9x8pSY6nA0UNinZrOBegjwbVd2km8A7eMSdxQ8FJvWmkTsJisGuAGQ";
-    if (trackMeta.title.toLowerCase().includes("midnight")) {
-      calculatedThumbnail = "https://lh3.googleusercontent.com/aida-public/AB6AXuCTcAcXcHPqipsxaWMoWF3TIP6JBMj31jsnkvUzvoaRLtvri9zgrrgSW85M6fPCV9twwGzWUR3NKujjkcrMLY3-OxCf-p-hwH635yaSW-OtWTgHgq6UuSSGUJpDuwuDlllpIVx_KNULt7t2jO3mn0FLX_isajgebu-3uKBD0O3Qwik_G4G4dSvEgBA-nEOpqEn3hU8HTpGBAO3r4TyvVYWQTE3eEfMZbgImdqg0O4wu-tsn82MhnizQwTstidviok_NPqVF7gRgJWA";
-    } else if (trackMeta.title.toLowerCase().includes("strobe")) {
-      calculatedThumbnail = "https://lh3.googleusercontent.com/aida-public/AB6AXuBOg4r5tS9ilh4L8mvzP1tWx_Ve70etKmpZhUowHMXA7d-OFB92CRQWl-Ne-esW5bv8DM1pZhEvoydN4brvi92DAL8mNqHWtGBvxaRIPk16sSE0Huh-TXupf96dh3pVn73VuWa05bgotlPCtIAhQZL9bGaPQ0tI2lx3Il_5Hsv-2QbZTEy1PvFhkBJUQ2uoYCbLUveJK5N0m1J5UjVzzcStHkxAGtNe14DqKKo30ue5aDvILFgt6Sh02pBABjycRBR60RGyk2ybvLI";
-    } else if (trackMeta.title.toLowerCase().includes("nightcall")) {
-      calculatedThumbnail = "https://lh3.googleusercontent.com/aida-public/AB6AXuAvFnRo-mWDJSbjYc6pX5pZ07aC8wT7bh0d8oOOn-xpOT-WEJlQ5pYStsJXdrglatwfDAZWHPeTe12Bip3jSOxh3NpB8EuzNRMImCe6XD6sJASKxK1bN03WBapmjCshiVLS1IV8Ce1TZM0_SllkYMLR9VbZLAyc4DvY0Ntv8ivNko8LdOnZBiv9jdYCjDh7Rv_9zxzLmpFcy3K3zCMoT6vZgMU-skEVe94ax9soVxkH_SZg0VGPo_AG4jw7bEvuUZrYw5bQI8-QdlM";
-    }
-
-    const downloadItem: ActiveDownload = {
-      id: `download-${Date.now()}`,
-      title: trackMeta.title,
-      artist: trackMeta.artist || "Web Artist",
-      duration: trackMeta.duration || 200,
-      progress: 0,
-      speed: "3.2 MB/s",
-      eta: "00:15",
-      status: "queued",
-      thumbnailUrl: calculatedThumbnail
-    };
+    const calculatedThumbnail = resolveMockThumbnail(trackMeta.title || '');
+    const downloadItem = createMockActiveDownload(trackMeta, calculatedThumbnail);
 
     setActiveDownload(downloadItem);
     addLog('info', `Queued thread initialized for: ${downloadItem.title}`);
@@ -376,64 +285,68 @@ export default function App() {
     addLog('info', `Connecting to YouTube manifest servers...`);
 
     downloadTimerRef.current = setInterval(() => {
-      currentProgress += Math.floor(Math.random() * 12) + 8; // Tick progress upwards
-      
+      const progressTick = getMockProgressTick(currentProgress);
+      currentProgress = progressTick.progress;
+
       if (currentProgress < 100) {
         // Downloading phase
-        const speedVal = (Math.random() * 1.5 + 2.5).toFixed(1);
-        const secondsLeft = Math.ceil((100 - currentProgress) / 8);
-        const formattedEta = `00:${secondsLeft.toString().padStart(2, '0')}`;
-        
-        setActiveDownload(prev => prev ? {
-          ...prev,
-          progress: currentProgress,
-          status: 'downloading',
-          speed: `${speedVal} MB/s`,
-          eta: formattedEta
-        } : null);
+        setActiveDownload((prev) =>
+          prev
+            ? {
+                ...prev,
+                progress: currentProgress,
+                status: 'downloading',
+                speed: progressTick.speed,
+                eta: progressTick.eta,
+              }
+            : null,
+        );
 
         addLog('info', `Downloading stream payloads... ${currentProgress}% completed.`);
       } else {
         // Conversion phase (FFMPEG compiling CJS/MP3 tags)
         clearInterval(downloadTimerRef.current);
         downloadTimerRef.current = null;
-        
-        setActiveDownload(prev => prev ? {
-          ...prev,
-          progress: 100,
-          status: 'converting',
-          speed: 'FFmpeg encoding',
-          eta: '00:01'
-        } : null);
 
-        addLog('warning', `Payload retrieved. Calling FFmpeg compiler to encode ${settings.quality}kbps MP3 track.`);
+        setActiveDownload((prev) =>
+          prev
+            ? {
+                ...prev,
+                progress: 100,
+                status: 'converting',
+                speed: 'FFmpeg encoding',
+                eta: '00:01',
+              }
+            : null,
+        );
+
+        addLog(
+          'warning',
+          `Payload retrieved. Calling FFmpeg compiler to encode ${settings.quality}kbps MP3 track.`,
+        );
 
         setTimeout(() => {
-          // Finalize addition to Library tracks database
-          const calculatedSize = `${((trackMeta.duration * (parseInt(settings.quality) / 8)) / 1024).toFixed(1)} MB`;
-          const completedTrack: LibraryTrack = {
-            id: `track-${Date.now()}`,
-            title: trackMeta.title,
-            artist: trackMeta.artist || "Synthesized Hits",
-            album: trackMeta.album || "CarTune Compiled Drive",
-            duration: trackMeta.duration,
-            bitrate: settings.quality,
-            size: calculatedSize,
-            thumbnailUrl: calculatedThumbnail,
-            genre: trackMeta.genre || "Drive Pop",
-            downloadedAt: new Date().toLocaleDateString()
-          };
+          const completedTrack = createCompletedTrack(trackMeta, settings, calculatedThumbnail);
 
-          setTracks(prev => [completedTrack, ...prev]);
+          setTracks((prev) => [completedTrack, ...prev]);
           setActiveDownload(null);
-          addLog('success', `CarTune MP3 successfully outputted to: ${settings.saveLocation}\\${completedTrack.artist} - ${completedTrack.title}.mp3`);
-          
+          addLog(
+            'success',
+            `CarTune MP3 successfully outputted to: ${settings.saveLocation}\\${completedTrack.artist} - ${completedTrack.title}.mp3`,
+          );
+
           if (settings.language === Language.HE) {
-            alert(`השיר "${completedTrack.title}" הורד והומר בהצלחה לקצב של ${settings.quality}kbps!`);
+            alert(
+              `השיר "${completedTrack.title}" הורד והומר בהצלחה לקצב של ${settings.quality}kbps!`,
+            );
           } else if (settings.language === Language.RU) {
-            alert(`Песня "${completedTrack.title}" успешно загружена и переведена в формат MP3 со скоростью ${settings.quality} кбит/с!`);
+            alert(
+              `Песня "${completedTrack.title}" успешно загружена и переведена в формат MP3 со скоростью ${settings.quality} кбит/с!`,
+            );
           } else {
-            alert(`Successfully downloaded and compiled "${completedTrack.title}" at ${settings.quality}kbps MP3!`);
+            alert(
+              `Successfully downloaded and compiled "${completedTrack.title}" at ${settings.quality}kbps MP3!`,
+            );
           }
         }, 1500);
       }
@@ -457,13 +370,16 @@ export default function App() {
             totalTracks: playlistData.tracks.length,
             downloadedTracks: 0,
             status: 'processing',
-            tracks: playlistData.tracks
+            tracks: playlistData.tracks,
           };
 
-          setPlaylists(prev => [newPlaylist, ...prev]);
+          setPlaylists((prev) => [newPlaylist, ...prev]);
           await desktopApi.library.savePlaylist(newPlaylist);
           setActiveTab('playlists');
-          addLog('success', `Parsed Playlist name: "${playlistData.name}" containing ${playlistData.tracks.length} tracks.`);
+          addLog(
+            'success',
+            `Parsed Playlist name: "${playlistData.name}" containing ${playlistData.tracks.length} tracks.`,
+          );
           const { jobId } = await desktopApi.downloads.start({
             url,
             isPlaylist: true,
@@ -508,55 +424,62 @@ export default function App() {
         }
 
         nativeJobIdRef.current = jobId;
-        setActiveDownload(prev => prev && prev.id.startsWith('pending-') ? { ...prev, id: jobId } : prev);
-      } catch (e: any) {
-        addLog('error', `Native download gateway failed: ${e?.message || e}`);
-        alert(e?.message || "Native download gateway failed.");
+        setActiveDownload((prev) =>
+          prev && prev.id.startsWith('pending-') ? { ...prev, id: jobId } : prev,
+        );
+      } catch (error: unknown) {
+        const message = getErrorMessage(error, 'Native download gateway failed.');
+        addLog('error', `Native download gateway failed: ${message}`);
+        alert(message);
       }
       return;
     }
-    
+
     try {
       const response = await fetch('/api/metadata', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url, isPlaylist })
+        body: JSON.stringify({ url, isPlaylist }),
       });
-      const data = await response.json();
-      
-      if (data.error) {
+      const data = (await response.json()) as TrackMetadata | PlaylistMetadata | { error?: string };
+
+      if ('error' in data && data.error) {
         addLog('error', `Server rejected parser request: ${data.error}`);
         alert(data.error);
         return;
       }
 
       if (isPlaylist) {
+        const playlistData = data as PlaylistMetadata;
         // Multi-song Playlist batch queue compilation
-        addLog('success', `Parsed Playlist name: "${data.name}" containing ${data.tracks.length} tracks.`);
-        
+        addLog(
+          'success',
+          `Parsed Playlist name: "${playlistData.name}" containing ${playlistData.tracks.length} tracks.`,
+        );
+
         const newPlaylist: Playlist = {
           id: `playlist-${Date.now()}`,
-          name: data.name,
+          name: playlistData.name,
           url: url.replace('https://', ''),
-          totalTracks: data.tracks.length,
+          totalTracks: playlistData.tracks.length,
           downloadedTracks: 0,
           status: 'processing',
-          tracks: data.tracks
+          tracks: playlistData.tracks,
         };
 
-        setPlaylists(prev => [newPlaylist, ...prev]);
+        setPlaylists((prev) => [newPlaylist, ...prev]);
         setActiveTab('playlists');
-        
-        // Setup incremental playlist downloader simulator thread
-        runPlaylistQueueWorker(newPlaylist.id, data.tracks);
-      } else {
-        // Individual audio track queue compiling
-        startSingleTrackDownload(data);
-      }
 
-    } catch (e: any) {
-      addLog('error', `Network error during manifest compiling: ${e?.message}`);
-      alert("Downloading gateway experienced a connection blip. Using fast fallbacks...");
+        // Setup incremental playlist downloader simulator thread
+        runPlaylistQueueWorker(newPlaylist.id, playlistData.tracks);
+      } else {
+        const metadata = data as TrackMetadata;
+        // Individual audio track queue compiling
+        startSingleTrackDownload(metadata);
+      }
+    } catch (error: unknown) {
+      addLog('error', `Network error during manifest compiling: ${getErrorMessage(error)}`);
+      alert('Downloading gateway experienced a connection blip. Using fast fallbacks...');
     }
   };
 
@@ -566,7 +489,7 @@ export default function App() {
   };
 
   // Playlist queue worker simulator thread
-  const runPlaylistQueueWorker = (playlistId: string, trackList: any[]) => {
+  const runPlaylistQueueWorker = (playlistId: string, trackList: Playlist['tracks']) => {
     let currentIdx = 0;
     addLog('info', `Starting playlist batch workers on playlist id: ${playlistId}`);
 
@@ -576,8 +499,8 @@ export default function App() {
 
     playlistTimerRef.current = setInterval(() => {
       // Find latest state details
-      setPlaylists(prev => {
-        const item = prev.find(p => p.id === playlistId);
+      setPlaylists((prev) => {
+        const item = prev.find((p) => p.id === playlistId);
         if (!item || item.status === 'paused') {
           clearInterval(playlistTimerRef.current);
           playlistTimerRef.current = null;
@@ -586,43 +509,33 @@ export default function App() {
 
         if (currentIdx < trackList.length) {
           const currentTrack = trackList[currentIdx];
-          
-          // Add this playlist track directly as downloaded to library state!
-          const calculatedSize = `${((currentTrack.duration * (parseInt(settings.quality) / 8)) / 1024).toFixed(1)} MB`;
-          
-          // Random album thumbnail
-          const thumbChoices = [
-            "https://lh3.googleusercontent.com/aida-public/AB6AXuCTcAcXcHPqipsxaWMoWF3TIP6JBMj31jsnkvUzvoaRLtvri9zgrrgSW85M6fPCV9twwGzWUR3NKujjkcrMLY3-OxCf-p-hwH635yaSW-OtWTgHgq6UuSSGUJpDuwuDlllpIVx_KNULt7t2jO3mn0FLX_isajgebu-3uKBD0O3Qwik_G4G4dSvEgBA-nEOpqEn3hU8HTpGBAO3r4TyvVYWQTE3eEfMZbgImdqg0O4wu-tsn82MhnizQwTstidviok_NPqVF7gRgJWA",
-            "https://lh3.googleusercontent.com/aida-public/AB6AXuBOg4r5tS9ilh4L8mvzP1tWx_Ve70etKmpZhUowHMXA7d-OFB92CRQWl-Ne-esW5bv8DM1pZhEvoydN4brvi92DAL8mNqHWtGBvxaRIPk16sSE0Huh-TXupf96dh3pVn73VuWa05bgotlPCtIAhQZL9bGaPQ0tI2lx3Il_5Hsv-2QbZTEy1PvFhkBJUQ2uoYCbLUveJK5N0m1J5UjVzzcStHkxAGtNe14DqKKo30ue5aDvILFgt6Sh02pBABjycRBR60RGyk2ybvLI",
-            "https://lh3.googleusercontent.com/aida-public/AB6AXuAvFnRo-mWDJSbjYc6pX5pZ07aC8wT7bh0d8oOOn-xpOT-WEJlQ5pYStsJXdrglatwfDAZWHPeTe12Bip3jSOxh3NpB8EuzNRMImCe6XD6sJASKxK1bN03WBapmjCshiVLS1IV8Ce1TZM0_SllkYMLR9VbZLAyc4DvY0Ntv8ivNko8LdOnZBiv9jdYCjDh7Rv_9zxzLmpFcy3K3zCMoT6vZgMU-skEVe94ax9soVxkH_SZg0VGPo_AG4jw7bEvuUZrYw5bQI8-QdlM"
-          ];
-
-          const completedTrack: LibraryTrack = {
-            id: `track-${Date.now()}-${currentIdx}`,
-            title: currentTrack.title,
-            artist: currentTrack.artist,
-            album: item.name,
-            duration: currentTrack.duration,
-            bitrate: settings.quality,
-            size: calculatedSize,
-            thumbnailUrl: thumbChoices[currentIdx % thumbChoices.length],
-            genre: item.name.includes("Lofi") || item.name.includes("Lo-Fi") ? "Lofi Beats" : "Synthwave",
-            downloadedAt: new Date().toLocaleDateString()
-          };
+          const completedTrack = createPlaylistCompletedTrack(
+            currentTrack,
+            item.name,
+            settings,
+            currentIdx,
+          );
 
           // Update library
-          setTracks(prevTracks => [completedTrack, ...prevTracks]);
-          addLog('success', `Batch compiled successfully [${item.name}]: ${completedTrack.artist} - ${completedTrack.title}`);
+          setTracks((prevTracks) => [completedTrack, ...prevTracks]);
+          addLog(
+            'success',
+            `Batch compiled successfully [${item.name}]: ${completedTrack.artist} - ${completedTrack.title}`,
+          );
 
           currentIdx++;
-          
+
           const isDone = currentIdx === trackList.length;
-          
-          return prev.map(p => p.id === playlistId ? {
-            ...p,
-            downloadedTracks: currentIdx,
-            status: isDone ? 'completed' : 'processing'
-          } : p);
+
+          return prev.map((p) =>
+            p.id === playlistId
+              ? {
+                  ...p,
+                  downloadedTracks: currentIdx,
+                  status: isDone ? 'completed' : 'processing',
+                }
+              : p,
+          );
         } else {
           clearInterval(playlistTimerRef.current);
           playlistTimerRef.current = null;
@@ -630,19 +543,21 @@ export default function App() {
 
         return prev;
       });
-
     }, 3500); // Process each song every 3.5 seconds
   };
 
-  const handleUpdatePlaylistStatus = (id: string, status: 'queued' | 'processing' | 'paused' | 'completed') => {
-    setPlaylists(prev => prev.map(p => p.id === id ? { ...p, status } : p));
+  const handleUpdatePlaylistStatus = (
+    id: string,
+    status: 'queued' | 'processing' | 'paused' | 'completed',
+  ) => {
+    setPlaylists((prev) => prev.map((p) => (p.id === id ? { ...p, status } : p)));
     desktopApi?.library.updatePlaylistStatus(id, status).catch((error) => {
-      addLog('error', `Unable to persist playlist status: ${error?.message || error}`);
+      addLog('error', `Unable to persist playlist status: ${getErrorMessage(error)}`);
     });
     addLog('info', `Playlist state modified to: ${status}`);
 
     if (!desktopApi && status === 'processing') {
-      const playlist = playlists.find(p => p.id === id);
+      const playlist = playlists.find((p) => p.id === id);
       if (playlist) {
         runPlaylistQueueWorker(id, playlist.tracks);
       }
@@ -650,9 +565,9 @@ export default function App() {
   };
 
   const handleDeletePlaylist = (id: string) => {
-    setPlaylists(prev => prev.filter(p => p.id !== id));
+    setPlaylists((prev) => prev.filter((p) => p.id !== id));
     desktopApi?.library.deletePlaylist(id).catch((error) => {
-      addLog('error', `Unable to delete playlist from SQLite: ${error?.message || error}`);
+      addLog('error', `Unable to delete playlist from SQLite: ${getErrorMessage(error)}`);
     });
     addLog('warning', `Playlist queue item index removed: ${id}`);
   };
@@ -661,8 +576,8 @@ export default function App() {
     if (!desktopApi) return null;
     try {
       return await desktopApi.settings.chooseSaveLocation(settings.saveLocation);
-    } catch (error: any) {
-      addLog('error', `Folder picker failed: ${error?.message || error}`);
+    } catch (error: unknown) {
+      addLog('error', `Folder picker failed: ${getErrorMessage(error)}`);
       return null;
     }
   };
@@ -674,9 +589,8 @@ export default function App() {
 
   return (
     <div className="bg-background text-on-surface font-sans h-screen flex overflow-hidden select-none">
-      
       {/* Side Navigation Bar */}
-      <Sidebar 
+      <Sidebar
         activeTab={activeTab}
         settings={settings}
         onChangeTab={setActiveTab}
@@ -685,9 +599,8 @@ export default function App() {
 
       {/* Main Content Layout Container */}
       <div className="flex-1 flex flex-col h-full bg-surface relative min-w-0">
-        
         {/* Top Header */}
-        <Header 
+        <Header
           settings={settings}
           onUpdateLanguage={handleUpdateLanguage}
           onOpenSettings={() => setIsSettingsOpen(true)}
@@ -698,7 +611,7 @@ export default function App() {
         {/* Dynamic Switchable Screens */}
         <main className="flex-1 overflow-y-auto bg-surface relative flex flex-col min-h-0">
           {activeTab === 'downloads' && (
-            <Dashboard 
+            <Dashboard
               settings={settings}
               activeDownload={activeDownload}
               logs={logs}
@@ -709,7 +622,7 @@ export default function App() {
           )}
 
           {activeTab === 'completed' && (
-            <CompletedLibrary 
+            <CompletedLibrary
               settings={settings}
               tracks={tracks}
               onDeleteTrack={handleDeleteTrack}
@@ -719,7 +632,7 @@ export default function App() {
           )}
 
           {activeTab === 'playlists' && (
-            <PlaylistManager 
+            <PlaylistManager
               settings={settings}
               playlists={playlists}
               onAddPlaylist={handleAddPlaylistLink}
@@ -731,7 +644,7 @@ export default function App() {
       </div>
 
       {/* Configuration Settings Modal component */}
-      <SettingsModal 
+      <SettingsModal
         isOpen={isSettingsOpen}
         settings={settings}
         onClose={() => setIsSettingsOpen(false)}
@@ -740,12 +653,11 @@ export default function App() {
       />
 
       {/* Styled Help Modal component */}
-      <HelpModal 
+      <HelpModal
         isOpen={isHelpOpen}
         language={settings.language}
         onClose={() => setIsHelpOpen(false)}
       />
-
     </div>
   );
 }
