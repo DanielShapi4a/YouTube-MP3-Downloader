@@ -7,6 +7,7 @@ import {
   getPlaylistDownloadDirectory,
   hasTrackIdentity,
   isTrackInPlaylistDirectory,
+  normalizeSingleMediaUrl,
 } from './downloadPlanning';
 
 const existingTrack: LibraryTrack = {
@@ -33,6 +34,20 @@ describe('download planning helpers', () => {
 
   it('sanitizes invalid file and folder segments', () => {
     expect(cleanPathSegment('  A <bad> / playlist?  ', 'Playlist')).toBe('A bad playlist');
+  });
+
+  it('normalizes YouTube radio and short links into single-video URLs', () => {
+    expect(
+      normalizeSingleMediaUrl(
+        'https://www.youtube.com/watch?v=YG_ebwsneJ0&list=RDYG_ebwsneJ0&start_radio=1',
+      ),
+    ).toBe('https://www.youtube.com/watch?v=YG_ebwsneJ0');
+    expect(normalizeSingleMediaUrl('https://youtu.be/abc123?t=30')).toBe(
+      'https://www.youtube.com/watch?v=abc123',
+    );
+    expect(normalizeSingleMediaUrl('https://www.youtube.com/shorts/short123')).toBe(
+      'https://www.youtube.com/watch?v=short123',
+    );
   });
 
   it('matches duplicate playlist tracks by stable YouTube id inside the playlist folder', () => {

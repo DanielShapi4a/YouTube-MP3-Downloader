@@ -16,6 +16,7 @@ import {
   cleanPathSegment,
   getPlaylistDownloadDirectory,
   hasTrackIdentity,
+  normalizeSingleMediaUrl,
 } from './downloadPlanning';
 
 type LogSink = (event: NativeLogEvent) => void;
@@ -200,9 +201,10 @@ export class YtDlpService {
     url: string;
     isPlaylist: boolean;
   }): Promise<TrackMetadata | PlaylistMetadata> {
+    const inspectedUrl = input.isPlaylist ? input.url : normalizeSingleMediaUrl(input.url);
     const args = input.isPlaylist
-      ? ['--dump-single-json', '--flat-playlist', input.url]
-      : ['--dump-single-json', '--no-playlist', input.url];
+      ? ['--dump-single-json', '--flat-playlist', inspectedUrl]
+      : ['--dump-single-json', '--no-playlist', inspectedUrl];
     const json = await this.runJson(args);
 
     if (input.isPlaylist) {
@@ -222,7 +224,7 @@ export class YtDlpService {
       };
     }
 
-    return this.toTrackMetadata(json, input.url);
+    return this.toTrackMetadata(json, inspectedUrl);
   }
 
   async startDownload(
@@ -466,6 +468,7 @@ export class YtDlpService {
     });
 
     const sourceTemplate = path.join(tempDir, 'source.%(ext)s');
+    const downloadUrl = normalizeSingleMediaUrl(request.url);
     await this.runProcess(
       this.userBinPath,
       [
@@ -475,11 +478,9 @@ export class YtDlpService {
         '-f',
         'bestaudio/best',
         '--write-thumbnail',
-        '--convert-thumbnails',
-        'jpg',
         '-o',
         sourceTemplate,
-        request.url,
+        downloadUrl,
       ],
       (line) => {
         const progress = parseYtDlpProgress(line);
@@ -573,7 +574,7 @@ export class YtDlpService {
       genre: metadata.genre,
       downloadedAt: new Date().toLocaleDateString(),
       filePath: outputPath,
-      sourceUrl: request.url,
+      sourceUrl: downloadUrl,
     };
   }
 
@@ -585,7 +586,7 @@ export class YtDlpService {
       duration: Math.round(Number(json.duration || 0)),
       genre: resolveGenre(json),
       thumbnailUrl: json.thumbnail || json.thumbnails?.at?.(-1)?.url || '',
-      url: json.webpage_url || fallbackUrl,
+      url: normalizeSingleMediaUrl(json.webpage_url || fallbackUrl),
     };
   }
 
@@ -630,6 +631,7 @@ export class YtDlpService {
     return new Promise<void>((resolve, reject) => {
       const child = spawn(command, args, { windowsHide: true });
       this.jobs.set(jobId, child);
+      const recentOutput: string[] = [];
 
       const consume = (chunk: Buffer) => {
         chunk
@@ -637,7 +639,13 @@ export class YtDlpService {
           .split(/\r?\n/)
           .map((line) => line.trim())
           .filter(Boolean)
-          .forEach(onLine);
+          .forEach((line) => {
+            recentOutput.push(line);
+            if (recentOutput.length > 20) {
+              recentOutput.shift();
+            }
+            onLine(line);
+          });
       };
 
       child.stdout.on('data', consume);
@@ -661,7 +669,17 @@ export class YtDlpService {
           return;
         }
 
-        reject(new Error(`${path.basename(command)} exited with code ${code}`));
+        const details = recentOutput
+          .filter((line) => /error|warning|unable|failed|unsupported|not available/i.test(line))
+          .slice(-5)
+          .join(' ');
+        reject(
+          new Error(
+            details
+              ? `${path.basename(command)} exited with code ${code}: ${details}`
+              : `${path.basename(command)} exited with code ${code}`,
+          ),
+        );
       });
     });
   }

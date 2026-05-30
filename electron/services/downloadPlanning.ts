@@ -16,6 +16,36 @@ export function getPlaylistDownloadDirectory(saveLocation: string, playlistName:
   return path.join(saveLocation, cleanPathSegment(playlistName, 'YouTube Playlist'));
 }
 
+export function normalizeSingleMediaUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.replace(/^www\./, '').toLowerCase();
+
+    if (hostname === 'youtu.be') {
+      const videoId = parsed.pathname.split('/').filter(Boolean)[0];
+      return videoId ? `https://www.youtube.com/watch?v=${videoId}` : value;
+    }
+
+    if (!hostname.endsWith('youtube.com')) {
+      return value;
+    }
+
+    const watchId = parsed.searchParams.get('v');
+    if (watchId) {
+      return `https://www.youtube.com/watch?v=${watchId}`;
+    }
+
+    const [kind, videoId] = parsed.pathname.split('/').filter(Boolean);
+    if ((kind === 'shorts' || kind === 'live' || kind === 'embed') && videoId) {
+      return `https://www.youtube.com/watch?v=${videoId}`;
+    }
+
+    return value;
+  } catch {
+    return value;
+  }
+}
+
 export function getTrackIdentityKeys(track: TrackIdentityInput) {
   const keys = new Set<string>();
   const sourceUrl = normalizeSourceUrl(track.sourceUrl || track.url);
