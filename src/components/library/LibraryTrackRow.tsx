@@ -20,6 +20,8 @@ export default function LibraryTrackRow({
   onShowInFolder,
   onDeleteTrack,
 }: LibraryTrackRowProps) {
+  const canPlay = Boolean(track.filePath);
+
   return (
     <div
       className={`group flex flex-col md:flex-row items-stretch md:items-center gap-4 p-3 bg-surface-container-low border hover:bg-surface-container border-surface-container-highest hover:border-surface-variant rounded-xl transition-all duration-200 ${
@@ -28,10 +30,13 @@ export default function LibraryTrackRow({
           : ''
       }`}
     >
-      <div
+      <button
         id={`play-track-box-${track.id}`}
+        type="button"
+        aria-label={`${isPlaying ? 'Pause' : 'Play'} ${track.title}`}
         onClick={() => onPlayToggle(track)}
-        className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-surface-container-highest cursor-pointer flex-shrink-0 border border-outline-variant/10 shadow-md"
+        className="relative w-16 h-16 rounded-lg overflow-hidden shrink-0 bg-surface-container-highest cursor-pointer flex-shrink-0 border border-outline-variant/10 shadow-md text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+        title={canPlay ? `${isPlaying ? 'Pause' : 'Play'} ${track.title}` : 'Local file missing'}
       >
         <img
           alt="Album frame"
@@ -52,20 +57,20 @@ export default function LibraryTrackRow({
           }`}
         >
           {isPlaying ? (
-            <div className="flex items-end gap-1.5 h-6">
-              <span className="w-1.5 bg-secondary rounded-full animate-[pulse_0.4s_infinite_alternate_ease-in-out]" />
-              <span className="w-1.5 bg-secondary rounded-full animate-[pulse_0.6s_infinite_alternate_ease-in-out_0.2s] h-1.5" />
-              <span className="w-1.5 bg-secondary rounded-full animate-[pulse_0.5s_infinite_alternate_ease-in-out_0.1s] h-3" />
-              <span className="w-1.5 bg-secondary rounded-full animate-[pulse_0.7s_infinite_alternate_ease-in-out_0.3s] h-2" />
-            </div>
+            <span className="material-icons-span text-white text-3xl font-black">pause</span>
           ) : (
             <span className="material-icons-span text-white text-3xl font-black">play_arrow</span>
           )}
         </div>
-      </div>
+      </button>
 
-      <div className="flex-1 min-w-0" onClick={() => onPlayToggle(track)}>
-        <h3 className="font-body-lg text-sm font-bold text-on-surface truncate cursor-pointer group-hover:text-secondary-fixed transition-colors">
+      <button
+        type="button"
+        onClick={() => onPlayToggle(track)}
+        className="flex-1 min-w-0 text-left cursor-pointer rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-secondary"
+        title={canPlay ? `${isPlaying ? 'Pause' : 'Play'} ${track.title}` : 'Local file missing'}
+      >
+        <h3 className="font-body-lg text-sm font-bold text-on-surface truncate group-hover:text-secondary-fixed transition-colors">
           {track.title}
         </h3>
         <div className="flex flex-wrap items-center gap-2 mt-1 font-body-md text-xs text-on-surface-variant truncate">
@@ -77,7 +82,7 @@ export default function LibraryTrackRow({
             {track.genre}
           </span>
         </div>
-      </div>
+      </button>
 
       <div className="flex items-center justify-between md:justify-end gap-6 shrink-0 pt-3 md:pt-0 border-t border-outline-variant/15 md:border-t-0">
         <div className="flex flex-col items-start md:items-end">

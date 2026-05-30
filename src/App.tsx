@@ -4,7 +4,6 @@ import {
   LibraryTrack,
   ActiveDownload,
   Playlist,
-  LogEntry,
   Language,
   TrackMetadata,
   PlaylistMetadata,
@@ -27,6 +26,15 @@ import {
   resolveMockThumbnail,
 } from './services/webDownloadSimulator';
 import { getErrorMessage } from './utils/errors';
+import { useAppLogs } from './hooks/useAppLogs';
+import {
+  applyPlaylistProgress,
+  createActiveDownloadFromProgress,
+  createResolvingDownload,
+  createStartingTrackDownload,
+  updatePendingPlaylistDownload,
+  upsertCompletedTrack,
+} from './services/downloadState';
 
 export default function App() {
   const desktopApi = window.carTune;
@@ -57,7 +65,7 @@ export default function App() {
   const [activeDownload, setActiveDownload] = useState<ActiveDownload | null>(null);
 
   // Advanced Technical Logs
-  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const { logs, addLog, clearLogs } = useAppLogs();
 
   // Track intervals for download simulation
   const downloadTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -134,63 +142,30 @@ export default function App() {
     };
   }, [desktopApi]);
 
-  const addLog = (type: 'info' | 'warning' | 'error' | 'success', message: string) => {
-    const newLog: LogEntry = {
-      id: `log-${Date.now()}-${Math.random()}`,
-      timestamp: new Date().toLocaleTimeString(),
-      type,
-      message,
-    };
-    setLogs((prev) => [...prev.slice(-99), newLog]); // Keep last 100 logs
-  };
-
   function handleNativeDownloadProgress(event: DownloadProgressEvent) {
-    if (event.status === 'completed' && event.track) {
-      setTracks((prev) => {
-        const withoutDuplicate = prev.filter((track) => track.id !== event.track!.id);
-        return [event.track!, ...withoutDuplicate];
-      });
+    if (event.status === 'completed') {
+      if (event.track) {
+        const completedTrack = event.track;
+
+        setTracks((prev) => upsertCompletedTrack(prev, completedTrack));
+        addLog('success', `CarTune MP3 successfully outputted to: ${completedTrack.filePath}`);
+      }
+
       if (!event.playlistId || event.downloadedTracks === event.totalTracks) {
         nativeJobIdRef.current = null;
+        setActiveDownload(null);
+      } else {
+        setActiveDownload(createActiveDownloadFromProgress(event));
       }
-      setActiveDownload(null);
-      addLog('success', `CarTune MP3 successfully outputted to: ${event.track.filePath}`);
     } else if (event.status === 'failed') {
       nativeJobIdRef.current = null;
       setActiveDownload(null);
       addLog('error', event.error || `Download failed for ${event.title}`);
     } else {
-      setActiveDownload({
-        id: event.jobId,
-        title: event.title,
-        artist: event.artist,
-        duration: event.duration,
-        progress: Math.round(event.progress),
-        speed: event.speed,
-        eta: event.eta,
-        status: event.status,
-        thumbnailUrl: event.thumbnailUrl,
-        playlistId: event.playlistId,
-        error: event.error,
-      });
+      setActiveDownload(createActiveDownloadFromProgress(event));
     }
 
-    if (event.playlistId && typeof event.downloadedTracks === 'number') {
-      setPlaylists((prev) =>
-        prev.map((playlist) =>
-          playlist.id === event.playlistId
-            ? {
-                ...playlist,
-                downloadedTracks: event.downloadedTracks!,
-                status:
-                  event.status === 'completed' && event.downloadedTracks === playlist.totalTracks
-                    ? 'completed'
-                    : 'processing',
-              }
-            : playlist,
-        ),
-      );
-    }
+    setPlaylists((prev) => applyPlaylistProgress(prev, event));
   }
 
   const handleUpdateLanguage = (lang: Language) => {
@@ -358,7 +333,11 @@ export default function App() {
     addLog('info', `API fetch initiated mapping URL context: ${url}`);
 
     if (desktopApi) {
+      const pendingDownloadId = `pending-${Date.now()}`;
+
       try {
+        setActiveDownload(createResolvingDownload(pendingDownloadId, isPlaylist));
+
         const data = await desktopApi.metadata.inspect({ url, isPlaylist });
 
         if (isPlaylist) {
@@ -376,6 +355,14 @@ export default function App() {
           setPlaylists((prev) => [newPlaylist, ...prev]);
           await desktopApi.library.savePlaylist(newPlaylist);
           setActiveTab('playlists');
+          setActiveDownload((prev) =>
+            updatePendingPlaylistDownload(
+              prev,
+              pendingDownloadId,
+              playlistData.name,
+              playlistData.tracks.length,
+            ),
+          );
           addLog(
             'success',
             `Parsed Playlist name: "${playlistData.name}" containing ${playlistData.tracks.length} tracks.`,
@@ -398,17 +385,7 @@ export default function App() {
         }
 
         const metadata = data as TrackMetadata;
-        setActiveDownload({
-          id: `pending-${Date.now()}`,
-          title: metadata.title,
-          artist: metadata.artist,
-          duration: metadata.duration,
-          progress: 0,
-          speed: 'queued',
-          eta: '--:--',
-          status: 'queued',
-          thumbnailUrl: metadata.thumbnailUrl,
-        });
+        setActiveDownload(createStartingTrackDownload(pendingDownloadId, metadata));
         addLog('success', `Resolved metadata for "${metadata.title}" by ${metadata.artist}.`);
         const { jobId } = await desktopApi.downloads.start({
           url: metadata.url || url,
@@ -429,6 +406,7 @@ export default function App() {
         );
       } catch (error: unknown) {
         const message = getErrorMessage(error, 'Native download gateway failed.');
+        setActiveDownload(null);
         addLog('error', `Native download gateway failed: ${message}`);
         alert(message);
       }
@@ -617,7 +595,7 @@ export default function App() {
               logs={logs}
               onStartDownload={handleStartDownload}
               onCancelDownload={handleCancelDownload}
-              onClearLogs={() => setLogs([])}
+              onClearLogs={clearLogs}
             />
           )}
 
@@ -635,9 +613,11 @@ export default function App() {
             <PlaylistManager
               settings={settings}
               playlists={playlists}
+              libraryTracks={tracks}
               onAddPlaylist={handleAddPlaylistLink}
               onUpdatePlaylistStatus={handleUpdatePlaylistStatus}
               onDeletePlaylist={handleDeletePlaylist}
+              onAddLog={addLog}
             />
           )}
         </main>

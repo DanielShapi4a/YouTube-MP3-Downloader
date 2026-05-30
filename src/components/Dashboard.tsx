@@ -19,12 +19,14 @@ export default function Dashboard({
   onCancelDownload,
   onClearLogs,
 }: DashboardProps) {
-  const [urlInput, setUrlInput] = useState<string>('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
+  const [urlInput, setUrlInput] = useState<string>('');
   const [downloadMode, setDownloadMode] = useState<'single' | 'playlist'>('single');
   const [isLogsOpen, setIsLogsOpen] = useState<boolean>(false);
 
   const t = translations[settings.language];
   const isRtl = settings.language === Language.HE;
+  const isFetchingWithoutProgress =
+    activeDownload?.status === 'fetching' && activeDownload.progress <= 5;
 
   const handlePaste = async () => {
     try {
@@ -33,21 +35,9 @@ export default function Dashboard({
         if (text) {
           setUrlInput(text);
         }
-      } else {
-        // Fallback default sample link depending on mode
-        if (downloadMode === 'playlist') {
-          setUrlInput('https://www.youtube.com/playlist?list=PL_lofi_study_beats_2026');
-        } else {
-          setUrlInput('https://www.youtube.com/watch?v=dQw4w9WgXcQ'); // Rickroll
-        }
       }
-    } catch (e) {
-      // Fallback
-      if (downloadMode === 'playlist') {
-        setUrlInput('https://www.youtube.com/playlist?list=PL_lofi_study_beats_2026');
-      } else {
-        setUrlInput('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-      }
+    } catch {
+      setUrlInput((current) => current);
     }
   };
 
@@ -107,35 +97,39 @@ export default function Dashboard({
           <label className="text-xs font-label-bold text-on-surface-variant uppercase tracking-wider">
             {t.downloadType}
           </label>
-          <div className="inline-flex bg-surface-dim border border-outline-variant/30 p-1 rounded-lg w-fit">
+          <div className="grid grid-cols-2 gap-1 bg-surface-dim border border-outline-variant/30 p-1 rounded-lg w-full sm:w-fit">
             <button
               id="switch-single-btn"
-              onClick={() => {
-                setDownloadMode('single');
-                setUrlInput('https://www.youtube.com/watch?v=dQw4w9WgXcQ');
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-bold text-xs transition-all cursor-pointer ${
+              type="button"
+              aria-pressed={downloadMode === 'single'}
+              aria-label={t.singleTrack}
+              onClick={() => setDownloadMode('single')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-md font-label-bold text-xs transition-all cursor-pointer border ${
                 downloadMode === 'single'
-                  ? 'bg-secondary-container text-on-secondary-container font-black shadow-sm'
-                  : 'text-on-surface-variant hover:text-on-surface'
+                  ? 'bg-secondary-container text-on-secondary-container font-black shadow-sm border-secondary/50'
+                  : 'text-on-surface-variant hover:text-on-surface border-transparent'
               }`}
             >
-              <span className="material-icons-span text-sm">music_note</span>
+              <span className="material-icons-span text-sm">
+                {downloadMode === 'single' ? 'radio_button_checked' : 'music_note'}
+              </span>
               {t.singleTrack}
             </button>
             <button
               id="switch-playlist-btn"
-              onClick={() => {
-                setDownloadMode('playlist');
-                setUrlInput('https://www.youtube.com/playlist?list=PL_synthwave_retrowave_car');
-              }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-md font-label-bold text-xs transition-all cursor-pointer ${
+              type="button"
+              aria-pressed={downloadMode === 'playlist'}
+              aria-label={t.playlistMode}
+              onClick={() => setDownloadMode('playlist')}
+              className={`flex items-center justify-center gap-2 px-4 py-2 rounded-md font-label-bold text-xs transition-all cursor-pointer border ${
                 downloadMode === 'playlist'
-                  ? 'bg-secondary-container text-on-secondary-container font-black shadow-sm'
-                  : 'text-on-surface-variant hover:text-on-surface'
+                  ? 'bg-secondary-container text-on-secondary-container font-black shadow-sm border-secondary/50'
+                  : 'text-on-surface-variant hover:text-on-surface border-transparent'
               }`}
             >
-              <span className="material-icons-span text-sm font-bold">playlist_add_check</span>
+              <span className="material-icons-span text-sm font-bold">
+                {downloadMode === 'playlist' ? 'radio_button_checked' : 'playlist_add_check'}
+              </span>
               {t.playlistMode}
             </button>
           </div>
@@ -267,19 +261,36 @@ export default function Dashboard({
             {/* Title metadata progress meter */}
             <div className="flex-1 flex flex-col gap-1 z-10 min-w-0">
               <div className="flex justify-between items-start">
-                <h4 className="font-body-lg text-sm text-on-surface font-bold truncate pr-4">
-                  {activeDownload.title}
-                </h4>
+                <div className="min-w-0 pr-4">
+                  <h4 className="font-body-lg text-sm text-on-surface font-bold truncate">
+                    {activeDownload.title}
+                  </h4>
+                  {activeDownload.genre && (
+                    <div className="flex items-center gap-2 mt-1 text-[11px] text-on-surface-variant">
+                      <span className="truncate">{activeDownload.artist}</span>
+                      <span className="opacity-30">•</span>
+                      <span className="px-1.5 py-0.5 rounded bg-surface-dim border border-outline-variant/10 text-[10px] text-on-surface-variant/75 uppercase">
+                        {activeDownload.genre}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 <span className="font-mono text-sm text-secondary-fixed-dim whitespace-nowrap font-bold">
-                  {activeDownload.progress}%
+                  {isFetchingWithoutProgress ? '...' : `${activeDownload.progress}%`}
                 </span>
               </div>
 
               <div className="w-full h-2.5 bg-surface-dim rounded-full overflow-hidden border border-outline-variant/20 mt-1">
                 <div
                   id="active-progress-bar-fill"
-                  className="h-full bg-secondary-fixed-dim rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(0,227,253,0.5)]"
-                  style={{ width: `${activeDownload.progress}%` }}
+                  className={`h-full bg-secondary-fixed-dim rounded-full shadow-[0_0_8px_rgba(0,227,253,0.5)] ${
+                    isFetchingWithoutProgress
+                      ? 'w-1/3 animate-[active-progress-indeterminate_1.1s_ease-in-out_infinite]'
+                      : 'transition-all duration-300'
+                  }`}
+                  style={
+                    isFetchingWithoutProgress ? undefined : { width: `${activeDownload.progress}%` }
+                  }
                 ></div>
               </div>
 
@@ -287,17 +298,19 @@ export default function Dashboard({
               <div className="flex flex-wrap items-center justify-between gap-2 mt-2 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded bg-secondary-container/10 text-secondary border border-secondary-container/20 text-[10px] uppercase font-label-bold tracking-wider">
-                    {activeDownload.status === 'converting'
-                      ? settings.language === Language.HE
-                        ? 'מקודד'
-                        : settings.language === Language.RU
-                          ? 'Конвертация'
-                          : 'Converting'
-                      : settings.language === Language.HE
-                        ? 'מוריד'
-                        : settings.language === Language.RU
-                          ? 'Загрузка'
-                          : 'Downloading'}
+                    {activeDownload.status === 'fetching'
+                      ? 'Fetching'
+                      : activeDownload.status === 'converting'
+                        ? settings.language === Language.HE
+                          ? 'מקודד'
+                          : settings.language === Language.RU
+                            ? 'Конвертация'
+                            : 'Converting'
+                        : settings.language === Language.HE
+                          ? 'מוריד'
+                          : settings.language === Language.RU
+                            ? 'Загрузка'
+                            : 'Downloading'}
                   </span>
                   <span className="text-on-surface-variant font-medium">
                     {activeDownload.speed}

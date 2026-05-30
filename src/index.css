@@ -79,6 +79,18 @@
   box-shadow: 0 4px 14px rgba(0, 227, 253, 0.25);
 }
 
+@keyframes active-progress-indeterminate {
+  0% {
+    transform: translateX(-120%);
+  }
+  50% {
+    transform: translateX(90%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
 .input-focus-glow:focus-within {
   border-color: #00daf3;
   box-shadow: 0 0 0 1px #00daf3;

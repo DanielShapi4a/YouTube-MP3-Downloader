@@ -36,6 +36,7 @@ export function createMockActiveDownload(
     eta: '00:15',
     status: 'queued',
     thumbnailUrl,
+    genre: trackMeta.genre || 'Music',
   };
 }
 

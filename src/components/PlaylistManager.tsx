@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 import { translations } from '../i18n';
-import { AppSettings, Playlist, Language } from '../types';
+import { AppSettings, Playlist, Language, LibraryTrack, LogEntry } from '../types';
+import { useTrackPlayback } from '../hooks/useTrackPlayback';
 
 interface PlaylistManagerProps {
   settings: AppSettings;
   playlists: Playlist[];
+  libraryTracks: LibraryTrack[];
   onAddPlaylist: (url: string) => void;
   onUpdatePlaylistStatus: (
     id: string,
     status: 'queued' | 'processing' | 'paused' | 'completed',
   ) => void;
   onDeletePlaylist: (id: string) => void;
+  onAddLog: (type: LogEntry['type'], msg: string) => void;
 }
 
 // Helper function to dynamically map high-quality theme art based on starting songs or playlist labels
@@ -36,13 +39,16 @@ const getPlaylistBgImage = (playlist: Playlist) => {
 export default function PlaylistManager({
   settings,
   playlists,
+  libraryTracks,
   onAddPlaylist,
   onUpdatePlaylistStatus,
   onDeletePlaylist,
+  onAddLog,
 }: PlaylistManagerProps) {
   const [playlistUrl, setPlaylistUrl] = useState<string>('');
   const [isInputOpen, setIsInputOpen] = useState<boolean>(false);
   const [selectedPlaylistForTracks, setSelectedPlaylistForTracks] = useState<Playlist | null>(null);
+  const { playingTrackId, toggleTrackPlayback } = useTrackPlayback(onAddLog);
 
   const t = translations[settings.language];
   const isRtl = settings.language === Language.HE;
@@ -57,6 +63,19 @@ export default function PlaylistManager({
 
   const handlePredefinedAdd = () => {
     onAddPlaylist('https://www.youtube.com/playlist?list=PL_retro_synthwave_hits_2026');
+  };
+
+  const getDownloadedPlaylistTrack = (playlist: Playlist, track: Playlist['tracks'][number]) => {
+    return libraryTracks.find((libraryTrack) => {
+      const sameSource = track.url && libraryTrack.sourceUrl === track.url;
+      const sameTitle =
+        libraryTrack.title.trim().toLowerCase() === track.title.trim().toLowerCase();
+      const sameArtist =
+        libraryTrack.artist.trim().toLowerCase() === track.artist.trim().toLowerCase();
+      const samePlaylist = libraryTrack.album === playlist.name;
+
+      return libraryTrack.filePath && (sameSource || (samePlaylist && sameTitle && sameArtist));
+    });
   };
 
   return (
@@ -375,16 +394,44 @@ export default function PlaylistManager({
                   const durationMins = Math.floor(track.duration / 60);
                   const durationSecs = Math.floor(track.duration % 60);
                   const formattedDuration = `${durationMins}:${durationSecs < 10 ? '0' : ''}${durationSecs}`;
+                  const downloadedTrack = getDownloadedPlaylistTrack(
+                    selectedPlaylistForTracks,
+                    track,
+                  );
+                  const isPlayable = Boolean(downloadedTrack?.filePath);
+                  const genre = downloadedTrack?.genre || track.genre || 'Music';
 
                   return (
-                    <div
+                    <button
                       key={idx}
-                      className="flex items-center justify-between p-3 bg-surface hover:bg-surface-container-high rounded-lg border border-outline-variant/5 transition-all text-sm gap-4"
+                      type="button"
+                      onClick={() => {
+                        if (downloadedTrack) {
+                          toggleTrackPlayback(downloadedTrack);
+                          return;
+                        }
+
+                        onAddLog(
+                          'warning',
+                          `Download "${track.title}" before playing a local sample.`,
+                        );
+                      }}
+                      className={`w-full flex items-center justify-between p-3 bg-surface hover:bg-surface-container-high rounded-lg border transition-all text-sm gap-4 text-left ${
+                        downloadedTrack && playingTrackId === downloadedTrack.id
+                          ? 'border-secondary/60 bg-surface-container-high'
+                          : 'border-outline-variant/5'
+                      } ${isPlayable ? 'cursor-pointer' : 'cursor-not-allowed opacity-80'}`}
                     >
                       <div className="flex items-center gap-3 min-w-0 text-start">
                         {/* Number Indicator */}
-                        <span className="font-mono text-xs text-on-surface-variant text-center shrink-0 w-5">
-                          {idx + 1}
+                        <span className="font-mono text-xs text-on-surface-variant text-center shrink-0 w-7">
+                          {downloadedTrack && playingTrackId === downloadedTrack.id ? (
+                            <span className="material-icons-span text-secondary text-base">
+                              pause
+                            </span>
+                          ) : (
+                            idx + 1
+                          )}
                         </span>
 
                         {/* Track Info */}
@@ -392,19 +439,32 @@ export default function PlaylistManager({
                           <h4 className="font-bold text-on-surface truncate leading-tight select-text text-xs">
                             {track.title}
                           </h4>
-                          <span className="text-[11px] text-on-surface-variant truncate block mt-0.5 select-text">
-                            {track.artist}
-                          </span>
+                          <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-on-surface-variant">
+                            <span className="truncate select-text">{track.artist}</span>
+                            <span className="opacity-30">•</span>
+                            <span className="px-1.5 py-0.5 rounded bg-surface-dim border border-outline-variant/10 text-[10px] text-on-surface-variant/75 uppercase">
+                              {genre}
+                            </span>
+                          </div>
                         </div>
                       </div>
 
                       {/* Right metadata details */}
                       <div className="flex items-center gap-2.5 shrink-0">
+                        <span
+                          className={`material-icons-span text-base ${
+                            isPlayable ? 'text-secondary' : 'text-on-surface-variant/40'
+                          }`}
+                        >
+                          {downloadedTrack && playingTrackId === downloadedTrack.id
+                            ? 'pause_circle'
+                            : 'play_circle'}
+                        </span>
                         <span className="font-mono text-[11px] text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded border border-outline-variant/10">
                           {formattedDuration}
                         </span>
                       </div>
-                    </div>
+                    </button>
                   );
                 })
               ) : (

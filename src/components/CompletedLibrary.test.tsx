@@ -41,13 +41,15 @@ describe('CompletedLibrary', () => {
   beforeEach(() => {
     vi.stubGlobal(
       'Audio',
-      vi.fn().mockImplementation((src: string) => ({
-        src,
-        pause: vi.fn(),
-        play: vi.fn().mockResolvedValue(undefined),
-        onended: null,
-        onerror: null,
-      })),
+      vi.fn().mockImplementation(function MockAudio(src: string) {
+        return {
+          src,
+          pause: vi.fn(),
+          play: vi.fn().mockResolvedValue(undefined),
+          onended: null,
+          onerror: null,
+        };
+      }),
     );
   });
 
@@ -94,7 +96,9 @@ describe('CompletedLibrary', () => {
         openFolder: vi.fn(),
       },
       media: {
-        getUrl: vi.fn((filePath: string) => `cartune-media://${encodeURIComponent(filePath)}`),
+        getUrl: vi.fn(
+          (filePath: string) => `cartune-media://file?path=${encodeURIComponent(filePath)}`,
+        ),
       },
     };
 
@@ -132,7 +136,9 @@ describe('CompletedLibrary', () => {
         openFolder: vi.fn(),
       },
       media: {
-        getUrl: vi.fn((filePath: string) => `cartune-media://${encodeURIComponent(filePath)}`),
+        getUrl: vi.fn(
+          (filePath: string) => `cartune-media://file?path=${encodeURIComponent(filePath)}`,
+        ),
       },
     };
     const props = renderLibrary();
@@ -140,7 +146,9 @@ describe('CompletedLibrary', () => {
     fireEvent.click(document.getElementById(`play-track-box-${track.id}`)!);
 
     expect(window.carTune.media.getUrl).toHaveBeenCalledWith(track.filePath);
-    expect(Audio).toHaveBeenCalledWith(`cartune-media://${encodeURIComponent(track.filePath!)}`);
+    expect(Audio).toHaveBeenCalledWith(
+      `cartune-media://file?path=${encodeURIComponent(track.filePath!)}`,
+    );
     await waitFor(() =>
       expect(props.onAddLog).toHaveBeenCalledWith(
         'success',

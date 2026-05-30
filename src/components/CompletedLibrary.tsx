@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { translations } from '../i18n';
 import { AppSettings, Language, LibraryTrack } from '../types';
 import LibraryTrackRow from './library/LibraryTrackRow';
 import { filterLibraryTracks, getTrackFilePath, getUniqueGenres } from '../utils/library';
+import { useTrackPlayback } from '../hooks/useTrackPlayback';
 
 interface CompletedLibraryProps {
   settings: AppSettings;
@@ -21,56 +22,12 @@ export default function CompletedLibrary({
 }: CompletedLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGenre, setSelectedGenre] = useState('All');
-  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const { playingTrackId, toggleTrackPlayback } = useTrackPlayback(onAddLog);
 
   const t = translations[settings.language];
   const isRtl = settings.language === Language.HE;
   const uniqueGenres = getUniqueGenres(tracks);
   const filteredTracks = filterLibraryTracks(tracks, searchQuery, selectedGenre);
-
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause();
-      audioRef.current = null;
-    };
-  }, []);
-
-  const stopPlayback = () => {
-    audioRef.current?.pause();
-    audioRef.current = null;
-    setPlayingTrackId(null);
-  };
-
-  const handlePlayToggle = (track: LibraryTrack) => {
-    if (playingTrackId === track.id) {
-      stopPlayback();
-      onAddLog('info', `Stopped playback of ${track.title}`);
-      return;
-    }
-
-    stopPlayback();
-
-    if (!track.filePath || !window.carTune) {
-      onAddLog('warning', `Playback requires a downloaded local MP3 file for "${track.title}".`);
-      return;
-    }
-
-    const audio = new Audio(window.carTune.media.getUrl(track.filePath));
-    audioRef.current = audio;
-    audio.onended = () => setPlayingTrackId(null);
-    audio.onerror = () => {
-      setPlayingTrackId(null);
-      onAddLog('error', `Unable to play local file: ${track.filePath}`);
-    };
-    audio.play().catch((error) => {
-      setPlayingTrackId(null);
-      onAddLog('error', `Playback failed: ${error?.message || error}`);
-    });
-
-    setPlayingTrackId(track.id);
-    onAddLog('success', `Playing local MP3 file for "${track.title}" by ${track.artist}`);
-  };
 
   const handleShowInFolder = async (track: LibraryTrack) => {
     const filePath = getTrackFilePath(track, settings.saveLocation);
@@ -171,7 +128,7 @@ export default function CompletedLibrary({
                 isPlaying={playingTrackId === track.id}
                 showInFolderLabel={t.showInFolder}
                 deleteLabel={t.deleteFile}
-                onPlayToggle={handlePlayToggle}
+                onPlayToggle={toggleTrackPlayback}
                 onShowInFolder={handleShowInFolder}
                 onDeleteTrack={onDeleteTrack}
               />
