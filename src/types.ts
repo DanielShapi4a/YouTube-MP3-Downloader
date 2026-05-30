@@ -51,6 +51,7 @@ export interface ActiveDownload {
   eta: string; // e.g., '00:12'
   status: DownloadStatus;
   thumbnailUrl: string;
+  genre?: string;
   playlistId?: string;
   error?: string;
 }
@@ -68,6 +69,7 @@ export interface Playlist {
     duration: number;
     url?: string;
     thumbnailUrl?: string;
+    genre?: string;
   }>;
 }
 
@@ -96,6 +98,7 @@ export interface PlaylistMetadata {
     duration: number;
     url: string;
     thumbnailUrl?: string;
+    genre?: string;
   }>;
 }
 
@@ -116,6 +119,7 @@ export interface DownloadProgressEvent {
   artist: string;
   duration: number;
   thumbnailUrl: string;
+  genre?: string;
   progress: number;
   speed: string;
   eta: string;

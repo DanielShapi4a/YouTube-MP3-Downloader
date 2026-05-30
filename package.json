@@ -8,17 +8,21 @@
   "main": "dist-electron/main.cjs",
   "scripts": {
     "dev": "tsx server.ts",
+    "start": "npm run electron:dev",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "native:rebuild:node": "npm rebuild better-sqlite3",
     "electron:build": "esbuild electron/main.ts electron/preload.ts --bundle --platform=node --format=cjs --external:electron --external:better-sqlite3 --external:ffmpeg-static --sourcemap --outdir=dist-electron --out-extension:.js=.cjs",
-    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000/api/health && npm run electron:build && cross-env NODE_ENV=development electron .\"",
+    "electron:rebuild": "electron-rebuild -f -w better-sqlite3 -v 35.7.5",
+    "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000/api/health && npm run electron:build && npm run electron:rebuild && cross-env NODE_ENV=development npm run electron:launch\"",
+    "electron:launch": "cmd /c \"set ELECTRON_RUN_AS_NODE=& electron .\"",
     "fetch:binaries": "node scripts/fetch-native-binaries.mjs",
-    "dist:win": "npm run fetch:binaries && npm run build && npm run electron:build && electron-builder --win && npm rebuild better-sqlite3",
+    "dist:win": "npm run fetch:binaries && npm run build && npm run electron:build && electron-builder --win",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "test": "vitest run"
+    "test": "npm run native:rebuild:node && vitest run"
   },
   "build": {
     "appId": "com.cartune.mp3",
@@ -51,7 +55,7 @@
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
-    "better-sqlite3": "^11.9.1",
+    "better-sqlite3": "^12.10.0",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "ffmpeg-static": "^5.2.0",
@@ -73,7 +77,7 @@
     "autoprefixer": "^10.4.21",
     "concurrently": "^9.1.2",
     "cross-env": "^7.0.3",
-    "electron": "^35.0.1",
+    "electron": "35.7.5",
     "electron-builder": "^26.0.12",
     "esbuild": "^0.25.0",
     "jsdom": "^25.0.1",
@@ -82,7 +86,7 @@
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
     "vite": "^6.2.3",
-    "vitest": "^2.1.9",
+    "vitest": "^4.1.7",
     "wait-on": "^8.0.2"
   }
 }

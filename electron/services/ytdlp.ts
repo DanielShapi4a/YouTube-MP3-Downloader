@@ -10,6 +10,13 @@ import type {
   PlaylistMetadata,
   TrackMetadata,
 } from '../../src/types';
+import {
+  addTrackIdentityKeys,
+  buildPlaylistTrackIdentityMap,
+  cleanPathSegment,
+  getPlaylistDownloadDirectory,
+  hasTrackIdentity,
+} from './downloadPlanning';
 
 type LogSink = (event: NativeLogEvent) => void;
 type ProgressSink = (event: DownloadProgressEvent) => void;
@@ -33,13 +40,6 @@ class CancelledDownloadError extends Error {
   }
 }
 
-const INVALID_FILE_CHARS = /[<>:"/\\|?*\u0000-\u001F]/g;
-
-const cleanSegment = (value: string, fallback: string) => {
-  const cleaned = value.replace(INVALID_FILE_CHARS, '').replace(/\s+/g, ' ').trim();
-  return cleaned.slice(0, 120) || fallback;
-};
-
 const parseYtDlpProgress = (line: string) => {
   const percentMatch = line.match(/\[download]\s+([0-9.]+)%/);
   if (!percentMatch) return null;
@@ -60,6 +60,65 @@ const parseFfmpegTime = (line: string, duration: number) => {
   const seconds = Number(match[1]) * 3600 + Number(match[2]) * 60 + Number(match[3]);
   return Math.min(99, Math.round((seconds / duration) * 100));
 };
+
+const resolveGenre = (primary: any, fallback?: any) => {
+  const candidates = [
+    primary?.genre,
+    ...(Array.isArray(primary?.genres) ? primary.genres : []),
+    ...(Array.isArray(primary?.categories) ? primary.categories : []),
+    fallback?.genre,
+    ...(Array.isArray(fallback?.genres) ? fallback.genres : []),
+    ...(Array.isArray(fallback?.categories) ? fallback.categories : []),
+  ].filter(Boolean);
+
+  const explicitGenre = candidates.find((candidate) => !isGenericGenre(candidate));
+  if (explicitGenre) return formatGenre(explicitGenre);
+
+  const searchableText = [
+    primary?.title,
+    primary?.track,
+    primary?.artist,
+    primary?.creator,
+    primary?.uploader,
+    primary?.channel,
+    ...(Array.isArray(primary?.tags) ? primary.tags : []),
+    fallback?.title,
+    fallback?.artist,
+    fallback?.uploader,
+    ...(Array.isArray(fallback?.tags) ? fallback.tags : []),
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase();
+
+  const inferredGenre = inferGenre(searchableText);
+  if (inferredGenre) return inferredGenre;
+
+  const genericGenre = candidates.find(Boolean);
+  return genericGenre ? formatGenre(genericGenre) : 'Music';
+};
+
+const isGenericGenre = (value: unknown) => {
+  const normalized = String(value).trim().toLowerCase();
+  return !normalized || normalized === 'music' || normalized === 'youtube audio';
+};
+
+const inferGenre = (text: string) => {
+  const rules: Array<[RegExp, string]> = [
+    [/\b(avicii|edm|dance|club|house|progressive house|electronic)\b/, 'Electronic'],
+    [/\b(lofi|lo-fi|chillhop|beats to relax|study beats)\b/, 'Lofi'],
+    [/\b(synthwave|retrowave|outrun|kavinsky|m83|the midnight)\b/, 'Synthwave'],
+    [/\b(hip hop|hip-hop|rap|trap)\b/, 'Hip-Hop'],
+    [/\b(rock|metal|punk|alternative)\b/, 'Rock'],
+    [/\b(pop|official lyric video|radio edit)\b/, 'Pop'],
+    [/\b(jazz|blues|soul|funk)\b/, 'Jazz'],
+    [/\b(classical|orchestra|piano|symphony)\b/, 'Classical'],
+  ];
+
+  return rules.find(([pattern]) => pattern.test(text))?.[1];
+};
+
+const formatGenre = (value: unknown) => String(value).trim().replace(/\s+/g, ' ');
 
 export class YtDlpService {
   private jobs = new Map<string, ChildProcessWithoutNullStreams>();
@@ -158,6 +217,7 @@ export class YtDlpService {
             ? entry.url
             : `https://www.youtube.com/watch?v=${entry.id || entry.url}`,
           thumbnailUrl: entry.thumbnail || entry.thumbnails?.at?.(-1)?.url || '',
+          genre: resolveGenre(entry, json),
         })),
       };
     }
@@ -171,6 +231,7 @@ export class YtDlpService {
     log: LogSink,
     saveTrack: (track: LibraryTrack) => void,
     updatePlaylist?: (downloadedTracks: number, completed: boolean) => void,
+    existingTracks: LibraryTrack[] = [],
   ) {
     const jobId = `job-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const playlistControl = request.isPlaylist
@@ -186,6 +247,16 @@ export class YtDlpService {
             url: request.url,
             isPlaylist: true,
           })) as PlaylistMetadata;
+          const playlistSaveLocation = getPlaylistDownloadDirectory(
+            request.saveLocation,
+            playlist.name,
+          );
+          fs.mkdirSync(playlistSaveLocation, { recursive: true });
+
+          const downloadedTrackKeys = buildPlaylistTrackIdentityMap(
+            existingTracks.filter((track) => !track.filePath || fs.existsSync(track.filePath)),
+            playlistSaveLocation,
+          );
           let completed = 0;
 
           for (let index = 0; index < playlist.tracks.length; index += 1) {
@@ -198,16 +269,46 @@ export class YtDlpService {
               artist: item.artist,
               album: playlist.name,
               duration: item.duration,
-              genre: 'YouTube Playlist',
+              genre: item.genre || 'Music',
               thumbnailUrl: item.thumbnailUrl || '',
               url: item.url,
             };
+
+            if (hasTrackIdentity(downloadedTrackKeys, metadata)) {
+              completed += 1;
+              updatePlaylist?.(completed, completed === playlist.tracks.length);
+              log({
+                type: 'info',
+                message: `Skipped duplicate playlist track: ${metadata.artist} - ${metadata.title}`,
+              });
+              emitProgress({
+                jobId,
+                playlistId: request.playlistId,
+                title: metadata.title,
+                artist: metadata.artist,
+                duration: metadata.duration,
+                thumbnailUrl: metadata.thumbnailUrl,
+                genre: metadata.genre,
+                progress: 100,
+                speed: 'skipped duplicate',
+                eta: '00:00',
+                status: 'completed',
+                downloadedTracks: completed,
+                totalTracks: playlist.tracks.length,
+              });
+              continue;
+            }
 
             let track: LibraryTrack;
             try {
               track = await this.downloadOne(
                 jobId,
-                { ...request, url: item.url, metadata },
+                {
+                  ...request,
+                  url: item.url,
+                  saveLocation: playlistSaveLocation,
+                  metadata,
+                },
                 metadata,
                 emitProgress,
                 log,
@@ -222,6 +323,12 @@ export class YtDlpService {
             }
 
             saveTrack(track);
+            addTrackIdentityKeys(downloadedTrackKeys, {
+              title: track.title,
+              artist: track.artist,
+              duration: track.duration,
+              url: track.sourceUrl || metadata.url,
+            });
             completed += 1;
             updatePlaylist?.(completed, completed === playlist.tracks.length);
             emitProgress({
@@ -232,6 +339,7 @@ export class YtDlpService {
               artist: metadata.artist,
               duration: metadata.duration,
               thumbnailUrl: metadata.thumbnailUrl,
+              genre: metadata.genre,
               progress: 100,
               speed: 'complete',
               eta: '00:00',
@@ -350,6 +458,7 @@ export class YtDlpService {
       artist: metadata.artist,
       duration: metadata.duration,
       thumbnailUrl: metadata.thumbnailUrl,
+      genre: metadata.genre,
       progress: 0,
       speed: 'fetching',
       eta: '--:--',
@@ -382,6 +491,7 @@ export class YtDlpService {
           artist: metadata.artist,
           duration: metadata.duration,
           thumbnailUrl: metadata.thumbnailUrl,
+          genre: metadata.genre,
           progress: Math.round(progress.percent * 0.72),
           speed: progress.speed,
           eta: progress.eta,
@@ -401,7 +511,7 @@ export class YtDlpService {
       throw new Error('yt-dlp did not produce an audio stream.');
     }
 
-    const outputName = `${cleanSegment(metadata.artist, 'Unknown Artist')} - ${cleanSegment(metadata.title, 'Untitled Track')}.mp3`;
+    const outputName = `${cleanPathSegment(metadata.artist, 'Unknown Artist')} - ${cleanPathSegment(metadata.title, 'Untitled Track')}.mp3`;
     const outputPath = path.join(request.saveLocation, outputName);
     const ffmpegArgs = [
       '-y',
@@ -440,6 +550,7 @@ export class YtDlpService {
           artist: metadata.artist,
           duration: metadata.duration,
           thumbnailUrl: metadata.thumbnailUrl,
+          genre: metadata.genre,
           progress: 72 + Math.round(ffmpegPercent * 0.27),
           speed: 'FFmpeg encoding',
           eta: '--:--',
@@ -472,7 +583,7 @@ export class YtDlpService {
       artist: json.artist || json.creator || json.uploader || json.channel || 'YouTube',
       album: json.album || json.playlist_title || 'CarTune Downloads',
       duration: Math.round(Number(json.duration || 0)),
-      genre: json.genre || json.categories?.[0] || 'YouTube Audio',
+      genre: resolveGenre(json),
       thumbnailUrl: json.thumbnail || json.thumbnails?.at?.(-1)?.url || '',
       url: json.webpage_url || fallbackUrl,
     };

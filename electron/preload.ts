@@ -40,6 +40,6 @@ contextBridge.exposeInMainWorld('carTune', {
     openFolder: (folderPath: string) => ipcRenderer.invoke('shell:openFolder', folderPath),
   },
   media: {
-    getUrl: (filePath: string) => `cartune-media://${encodeURIComponent(filePath)}`,
+    getUrl: (filePath: string) => `cartune-media://file?path=${encodeURIComponent(filePath)}`,
   },
 });

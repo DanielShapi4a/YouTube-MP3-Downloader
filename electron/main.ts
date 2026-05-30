@@ -1,6 +1,7 @@
-import { app, BrowserWindow, dialog, ipcMain, protocol, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import type {
   AppSettings,
   DownloadProgressEvent,
@@ -45,7 +46,9 @@ const createWindow = async () => {
 
   if (!app.isPackaged && process.env.NODE_ENV === 'development') {
     await mainWindow.loadURL('http://localhost:3000');
-    mainWindow.webContents.openDevTools({ mode: 'detach' });
+    if (process.env.ELECTRON_OPEN_DEVTOOLS === 'true') {
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
+    }
     return;
   }
 
@@ -76,20 +79,26 @@ app.whenReady().then(async () => {
 
   ytDlp = new YtDlpService(ffmpegPath);
 
-  protocol.registerFileProtocol('cartune-media', (request, callback) => {
-    const encodedPath = request.url.replace('cartune-media://', '');
-    const filePath = decodeURIComponent(encodedPath);
+  protocol.handle('cartune-media', async (request) => {
+    const filePath = getMediaFilePath(request.url);
 
     if (!isAllowedMediaPath(filePath)) {
       emitLog({
         type: 'warning',
         message: `Blocked media protocol request for unregistered file: ${filePath}`,
       });
-      callback({ error: -10 });
-      return;
+      return new Response('Media file is not registered in the library.', { status: 403 });
     }
 
-    callback({ path: filePath });
+    if (!fs.existsSync(filePath)) {
+      emitLog({
+        type: 'error',
+        message: `Media file is missing on disk: ${filePath}`,
+      });
+      return new Response('Media file was not found on disk.', { status: 404 });
+    }
+
+    return net.fetch(pathToFileURL(filePath).toString());
   });
 
   registerIpcHandlers();
@@ -136,6 +145,7 @@ function registerIpcHandlers() {
             );
           }
         : undefined,
+      db.listTracks(),
     );
   });
 
@@ -193,4 +203,15 @@ function isAllowedMediaPath(filePath: string) {
     .some(
       (track) => track.filePath && path.normalize(track.filePath).toLowerCase() === requestedPath,
     );
+}
+
+function getMediaFilePath(mediaUrl: string) {
+  const parsedUrl = new URL(mediaUrl);
+  const queryPath = parsedUrl.searchParams.get('path');
+
+  if (queryPath) {
+    return queryPath;
+  }
+
+  return decodeURIComponent(mediaUrl.replace('cartune-media://', ''));
 }
