@@ -601,7 +601,7 @@ export class YtDlpService {
     }
   }
 
-  private toTrackMetadata(json: any, fallbackUrl: string): TrackMetadata {
+  private async toTrackMetadata(json: any, fallbackUrl: string): Promise<TrackMetadata> {
     return {
       title: json.track || json.title || 'Untitled Track',
       artist: json.artist || json.creator || json.uploader || json.channel || 'YouTube',

@@ -28,5 +28,27 @@ describe('genre resolver', () => {
     expect(inferGenre('Avicii waiting for love official lyric video')).toBe('Electronic');
     expect(inferGenre('lofi beats to relax and study')).toBe('Lofi');
     expect(inferGenre('movie theme original soundtrack')).toBe('Soundtrack');
+    expect(inferGenre('AC/DC - Back In Black')).toBe('Rock');
+    expect(inferGenre('Metallica - Enter Sandman')).toBe('Metal');
+  });
+
+  it('lets stronger supporting fields beat a stray keyword hit', () => {
+    expect(
+      resolveMusicGenre({
+        title: 'A pop interview about classic rock',
+        artist: 'AC/DC',
+        tags: ['classic rock', 'hard rock'],
+        categories: ['Music'],
+      }),
+    ).toBe('Rock');
+  });
+
+  it('maps topic category URLs directly when available', () => {
+    expect(
+      resolveMusicGenre({
+        title: 'Unknown upload',
+        topicCategories: ['https://en.wikipedia.org/wiki/Rock_music'],
+      }),
+    ).toBe('Rock');
   });
 });
