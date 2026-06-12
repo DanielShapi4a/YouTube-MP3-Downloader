@@ -1,7 +1,7 @@
 {
   "name": "cartune-mp3",
   "private": true,
-  "version": "0.0.5",
+  "version": "0.0.6",
   "description": "CarTune MP3 desktop downloader and converter.",
   "author": "CarTune MP3",
   "type": "module",
