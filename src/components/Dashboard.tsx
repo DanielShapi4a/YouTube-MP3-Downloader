@@ -300,17 +300,23 @@ export default function Dashboard({
                   <span className="px-2 py-0.5 rounded bg-secondary-container/10 text-secondary border border-secondary-container/20 text-[10px] uppercase font-label-bold tracking-wider">
                     {activeDownload.status === 'fetching'
                       ? 'Fetching'
-                      : activeDownload.status === 'converting'
+                      : activeDownload.status === 'paused'
                         ? settings.language === Language.HE
-                          ? 'מקודד'
+                          ? 'מושהה'
                           : settings.language === Language.RU
-                            ? 'Конвертация'
-                            : 'Converting'
-                        : settings.language === Language.HE
-                          ? 'מוריד'
-                          : settings.language === Language.RU
-                            ? 'Загрузка'
-                            : 'Downloading'}
+                            ? 'Пауза'
+                            : 'Paused'
+                        : activeDownload.status === 'converting'
+                          ? settings.language === Language.HE
+                            ? 'מקודד'
+                            : settings.language === Language.RU
+                              ? 'Конвертация'
+                              : 'Converting'
+                          : settings.language === Language.HE
+                            ? 'מוריד'
+                            : settings.language === Language.RU
+                              ? 'Загрузка'
+                              : 'Downloading'}
                   </span>
                   <span className="text-on-surface-variant font-medium">
                     {activeDownload.speed}

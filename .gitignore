@@ -6,6 +6,9 @@ dist/
 dist-electron/
 release/
 coverage/
+resources/bin/deno.exe
+resources/bin/deno.zip
+resources/bin/deno-extract/
 .DS_Store
 *.log
 .env*

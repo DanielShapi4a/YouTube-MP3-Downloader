@@ -1,7 +1,7 @@
 {
   "name": "cartune-mp3",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.5",
   "description": "CarTune MP3 desktop downloader and converter.",
   "author": "CarTune MP3",
   "type": "module",
@@ -16,7 +16,7 @@
     "electron:dev": "concurrently -k \"npm run dev\" \"wait-on http://localhost:3000/api/health && npm run electron:build && npm run electron:rebuild && cross-env NODE_ENV=development npm run electron:launch\"",
     "electron:launch": "cmd /c \"set ELECTRON_RUN_AS_NODE=& electron .\"",
     "fetch:binaries": "node scripts/fetch-native-binaries.mjs",
-    "dist:win": "npm run fetch:binaries && npm run build && npm run electron:build && electron-builder --win",
+    "dist:win": "npm run fetch:binaries && npm run build && npm run electron:build && npm run electron:rebuild && electron-builder --win",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
@@ -35,6 +35,10 @@
       "dist-electron/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**",
+      "node_modules/ffmpeg-static/**"
+    ],
     "extraResources": [
       {
         "from": "resources/bin",
@@ -49,6 +53,15 @@
       "target": [
         "nsis"
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "runAfterFinish": false,
+      "shortcutName": "CarTune MP3"
     }
   },
   "dependencies": {

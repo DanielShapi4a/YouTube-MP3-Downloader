@@ -10,6 +10,7 @@ interface CompletedLibraryProps {
   tracks: LibraryTrack[];
   onDeleteTrack: (id: string) => void;
   onClearAllTracks: () => void;
+  onRefreshLibrary: () => void;
   onAddLog: (type: 'info' | 'warning' | 'error' | 'success', msg: string) => void;
 }
 
@@ -18,6 +19,7 @@ export default function CompletedLibrary({
   tracks,
   onDeleteTrack,
   onClearAllTracks,
+  onRefreshLibrary,
   onAddLog,
 }: CompletedLibraryProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,6 +67,14 @@ export default function CompletedLibrary({
         </div>
 
         <div className="flex items-center gap-4 self-start md:self-auto shrink-0">
+          <button
+            id="refresh-library-btn"
+            onClick={onRefreshLibrary}
+            className="flex items-center gap-1.5 text-secondary hover:text-secondary-fixed font-label-bold text-xs font-bold px-3 py-1 border border-secondary/20 hover:border-secondary/50 hover:bg-secondary/5 rounded transition-colors cursor-pointer"
+          >
+            <span className="material-icons-span text-sm">refresh</span>
+            {t.refreshLibrary}
+          </button>
           <span className="font-label-sm text-xs text-tertiary font-bold px-3 py-1 bg-surface-container-high rounded-full border border-outline-variant/10">
             {tracks.length} {t.itemsCount}
           </span>

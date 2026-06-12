@@ -96,7 +96,8 @@ export function applyPlaylistProgress(
 
     const totalTracks = event.totalTracks ?? playlist.totalTracks;
     const isCompleted = event.status === 'completed' && event.downloadedTracks === totalTracks;
-    const status: Playlist['status'] = isCompleted ? 'completed' : 'processing';
+    const status: Playlist['status'] =
+      event.status === 'paused' ? 'paused' : isCompleted ? 'completed' : 'processing';
 
     return {
       ...playlist,

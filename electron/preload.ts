@@ -21,6 +21,7 @@ contextBridge.exposeInMainWorld('carTune', {
   },
   library: {
     listTracks: () => ipcRenderer.invoke('library:listTracks'),
+    refresh: () => ipcRenderer.invoke('library:refresh'),
     deleteTrack: (id: string) => ipcRenderer.invoke('library:deleteTrack', id),
     clearTracks: () => ipcRenderer.invoke('library:clearTracks'),
     listPlaylists: () => ipcRenderer.invoke('library:listPlaylists'),

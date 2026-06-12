@@ -28,6 +28,11 @@ declare global {
       };
       library: {
         listTracks(): Promise<LibraryTrack[]>;
+        refresh(): Promise<{
+          removedTracks: number;
+          tracks: LibraryTrack[];
+          playlists: Playlist[];
+        }>;
         deleteTrack(id: string): Promise<void>;
         clearTracks(): Promise<void>;
         listPlaylists(): Promise<Playlist[]>;

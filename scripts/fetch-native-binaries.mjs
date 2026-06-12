@@ -1,23 +1,25 @@
 import fs from 'node:fs';
 import https from 'node:https';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(__dirname, '..');
 const outputDir = path.join(root, 'resources', 'bin');
-const outputFile = path.join(outputDir, process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp');
-const url =
+const ytDlpOutputFile = path.join(
+  outputDir,
+  process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
+);
+const ytDlpUrl =
   process.platform === 'win32'
     ? 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe'
     : 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp';
+const denoZipUrl =
+  'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip';
+const denoOutputFile = path.join(outputDir, 'deno.exe');
 
 fs.mkdirSync(outputDir, { recursive: true });
-
-if (fs.existsSync(outputFile) && fs.statSync(outputFile).size > 1024 * 1024) {
-  console.log(`yt-dlp binary already exists: ${outputFile}`);
-  process.exit(0);
-}
 
 const download = (sourceUrl, destination, redirectCount = 0) =>
   new Promise((resolve, reject) => {
@@ -59,11 +61,53 @@ const download = (sourceUrl, destination, redirectCount = 0) =>
       .on('error', reject);
   });
 
-console.log(`Downloading yt-dlp from ${url}`);
-await download(url, outputFile);
+const hasUsableBinary = (filePath, minimumBytes) =>
+  fs.existsSync(filePath) && fs.statSync(filePath).size > minimumBytes;
 
-if (process.platform !== 'win32') {
-  fs.chmodSync(outputFile, 0o755);
+if (hasUsableBinary(ytDlpOutputFile, 1024 * 1024)) {
+  console.log(`yt-dlp binary already exists: ${ytDlpOutputFile}`);
+} else {
+  console.log(`Downloading yt-dlp from ${ytDlpUrl}`);
+  await download(ytDlpUrl, ytDlpOutputFile);
+  console.log(`Saved yt-dlp binary to ${ytDlpOutputFile}`);
 }
 
-console.log(`Saved yt-dlp binary to ${outputFile}`);
+if (process.platform !== 'win32') {
+  fs.chmodSync(ytDlpOutputFile, 0o755);
+}
+
+if (process.platform === 'win32') {
+  if (hasUsableBinary(denoOutputFile, 1024 * 1024)) {
+    console.log(`Deno runtime already exists: ${denoOutputFile}`);
+  } else {
+    const denoZipPath = path.join(outputDir, 'deno.zip');
+    const denoExtractDir = path.join(outputDir, 'deno-extract');
+
+    fs.rmSync(denoZipPath, { force: true });
+    fs.rmSync(denoExtractDir, { recursive: true, force: true });
+    fs.mkdirSync(denoExtractDir, { recursive: true });
+
+    console.log(`Downloading Deno runtime from ${denoZipUrl}`);
+    await download(denoZipUrl, denoZipPath);
+
+    execFileSync(
+      'powershell.exe',
+      [
+        '-NoProfile',
+        '-Command',
+        'Expand-Archive',
+        '-LiteralPath',
+        denoZipPath,
+        '-DestinationPath',
+        denoExtractDir,
+        '-Force',
+      ],
+      { stdio: 'inherit' },
+    );
+
+    fs.copyFileSync(path.join(denoExtractDir, 'deno.exe'), denoOutputFile);
+    fs.rmSync(denoZipPath, { force: true });
+    fs.rmSync(denoExtractDir, { recursive: true, force: true });
+    console.log(`Saved Deno runtime to ${denoOutputFile}`);
+  }
+}

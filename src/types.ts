@@ -37,6 +37,7 @@ export type DownloadStatus =
   | 'queued'
   | 'fetching'
   | 'downloading'
+  | 'paused'
   | 'converting'
   | 'completed'
   | 'failed';

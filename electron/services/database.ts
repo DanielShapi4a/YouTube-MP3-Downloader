@@ -80,6 +80,55 @@ export class CarTuneDatabase {
       .all() as LibraryTrack[];
   }
 
+  refreshLibraryFromDisk() {
+    const tracks = this.listTracks();
+    const missingTracks = tracks.filter(
+      (track) => !track.filePath || !fs.existsSync(track.filePath),
+    );
+
+    const deleteTrack = this.db.prepare('DELETE FROM tracks WHERE id = ?');
+    const updatePlaylist = this.db.prepare(
+      'UPDATE playlists SET downloadedTracks = ?, status = ? WHERE id = ?',
+    );
+
+    const transaction = this.db.transaction(() => {
+      missingTracks.forEach((track) => deleteTrack.run(track.id));
+
+      const missingTrackIds = new Set(missingTracks.map((track) => track.id));
+      const remainingTracks = tracks.filter((track) => !missingTrackIds.has(track.id));
+      this.listPlaylists().forEach((playlist) => {
+        const downloadedTracks = playlist.tracks.filter((playlistTrack) =>
+          remainingTracks.some((track) => {
+            const sameSource = playlistTrack.url && track.sourceUrl === playlistTrack.url;
+            const sameAlbum = track.album === playlist.name;
+            const sameTitle =
+              track.title.trim().toLowerCase() === playlistTrack.title.trim().toLowerCase();
+            const sameArtist =
+              track.artist.trim().toLowerCase() === playlistTrack.artist.trim().toLowerCase();
+
+            return sameSource || (sameAlbum && sameTitle && sameArtist);
+          }),
+        ).length;
+        const status: Playlist['status'] =
+          downloadedTracks >= playlist.totalTracks
+            ? 'completed'
+            : downloadedTracks > 0 || playlist.status === 'processing'
+              ? 'paused'
+              : 'queued';
+
+        updatePlaylist.run(downloadedTracks, status, playlist.id);
+      });
+    });
+
+    transaction();
+
+    return {
+      removedTracks: missingTracks.length,
+      tracks: this.listTracks(),
+      playlists: this.listPlaylists(),
+    };
+  }
+
   saveTrack(track: LibraryTrack) {
     this.db
       .prepare(

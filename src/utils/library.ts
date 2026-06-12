@@ -11,7 +11,11 @@ export function getTrackFilePath(track: LibraryTrack, saveLocation: string) {
 }
 
 export function getUniqueGenres(tracks: LibraryTrack[]) {
-  return [ALL_GENRES, ...Array.from(new Set(tracks.map((track) => track.genre)))];
+  const genres = new Set(
+    tracks.map((track) => track.genre.trim()).filter((genre) => genre.length > 0),
+  );
+
+  return [ALL_GENRES, ...Array.from(genres).sort((a, b) => a.localeCompare(b))];
 }
 
 export function filterLibraryTracks(

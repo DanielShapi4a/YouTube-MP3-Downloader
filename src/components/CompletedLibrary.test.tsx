@@ -30,6 +30,7 @@ const renderLibrary = (tracks: LibraryTrack[] = [track]) => {
     tracks,
     onDeleteTrack: vi.fn(),
     onClearAllTracks: vi.fn(),
+    onRefreshLibrary: vi.fn(),
     onAddLog: vi.fn(),
   };
 
@@ -79,6 +80,7 @@ describe('CompletedLibrary', () => {
       },
       library: {
         listTracks: vi.fn(),
+        refresh: vi.fn(),
         deleteTrack: vi.fn(),
         clearTracks: vi.fn(),
         listPlaylists: vi.fn(),
@@ -119,6 +121,7 @@ describe('CompletedLibrary', () => {
       },
       library: {
         listTracks: vi.fn(),
+        refresh: vi.fn(),
         deleteTrack: vi.fn(),
         clearTracks: vi.fn(),
         listPlaylists: vi.fn(),
@@ -155,5 +158,13 @@ describe('CompletedLibrary', () => {
         expect.stringContaining('Playing local MP3 file'),
       ),
     );
+  });
+
+  it('requests a library refresh from the header action', () => {
+    const props = renderLibrary();
+
+    fireEvent.click(screen.getByRole('button', { name: /refresh/i }));
+
+    expect(props.onRefreshLibrary).toHaveBeenCalledOnce();
   });
 });

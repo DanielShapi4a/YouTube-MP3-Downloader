@@ -18,6 +18,7 @@ import {
   hasTrackIdentity,
   normalizeSingleMediaUrl,
 } from './downloadPlanning';
+import { isBroadMetadataLabel, resolveMusicGenre } from './genre';
 
 type LogSink = (event: NativeLogEvent) => void;
 type ProgressSink = (event: DownloadProgressEvent) => void;
@@ -26,6 +27,8 @@ interface PlaylistControl {
   paused: boolean;
   cancelled: boolean;
   currentJobId: string;
+  emitProgress: ProgressSink;
+  lastProgress?: DownloadProgressEvent;
   resume?: () => void;
 }
 
@@ -62,91 +65,42 @@ const parseFfmpegTime = (line: string, duration: number) => {
   return Math.min(99, Math.round((seconds / duration) * 100));
 };
 
-const resolveGenre = (primary: any, fallback?: any) => {
-  const candidates = [
-    primary?.genre,
-    ...(Array.isArray(primary?.genres) ? primary.genres : []),
-    ...(Array.isArray(primary?.categories) ? primary.categories : []),
-    fallback?.genre,
-    ...(Array.isArray(fallback?.genres) ? fallback.genres : []),
-    ...(Array.isArray(fallback?.categories) ? fallback.categories : []),
-  ].filter(Boolean);
-
-  const explicitGenre = candidates.find((candidate) => !isGenericGenre(candidate));
-  if (explicitGenre) return formatGenre(explicitGenre);
-
-  const searchableText = [
-    primary?.title,
-    primary?.track,
-    primary?.artist,
-    primary?.creator,
-    primary?.uploader,
-    primary?.channel,
-    ...(Array.isArray(primary?.tags) ? primary.tags : []),
-    fallback?.title,
-    fallback?.artist,
-    fallback?.uploader,
-    ...(Array.isArray(fallback?.tags) ? fallback.tags : []),
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-
-  const inferredGenre = inferGenre(searchableText);
-  if (inferredGenre) return inferredGenre;
-
-  const genericGenre = candidates.find(Boolean);
-  return genericGenre ? formatGenre(genericGenre) : 'Music';
-};
-
-const isGenericGenre = (value: unknown) => {
-  const normalized = String(value).trim().toLowerCase();
-  return !normalized || normalized === 'music' || normalized === 'youtube audio';
-};
-
-const inferGenre = (text: string) => {
-  const rules: Array<[RegExp, string]> = [
-    [/\b(avicii|edm|dance|club|house|progressive house|electronic)\b/, 'Electronic'],
-    [/\b(lofi|lo-fi|chillhop|beats to relax|study beats)\b/, 'Lofi'],
-    [/\b(synthwave|retrowave|outrun|kavinsky|m83|the midnight)\b/, 'Synthwave'],
-    [/\b(hip hop|hip-hop|rap|trap)\b/, 'Hip-Hop'],
-    [/\b(rock|metal|punk|alternative)\b/, 'Rock'],
-    [/\b(pop|official lyric video|radio edit)\b/, 'Pop'],
-    [/\b(jazz|blues|soul|funk)\b/, 'Jazz'],
-    [/\b(classical|orchestra|piano|symphony)\b/, 'Classical'],
-  ];
-
-  return rules.find(([pattern]) => pattern.test(text))?.[1];
-};
-
-const formatGenre = (value: unknown) => String(value).trim().replace(/\s+/g, ' ');
+const chooseMoreSpecificGenre = (primary: string, fallback: string) =>
+  isBroadMetadataLabel(primary) && !isBroadMetadataLabel(fallback) ? fallback : primary || fallback;
 
 export class YtDlpService {
   private jobs = new Map<string, ChildProcessWithoutNullStreams>();
   private playlistControls = new Map<string, PlaylistControl>();
+  private cancelledJobIds = new Set<string>();
   private ffmpegPath: string;
   private userBinPath: string;
   private packagedBinPath: string;
+  private userDenoPath: string;
+  private packagedDenoPath: string;
 
   constructor(ffmpegPath: string) {
     this.ffmpegPath = ffmpegPath;
+    const binaryDirectory = path.join(app.getPath('userData'), 'bin');
+    const resourceBinaryDirectory = app.isPackaged
+      ? path.join(process.resourcesPath, 'bin')
+      : path.join(process.cwd(), 'resources', 'bin');
+
     this.userBinPath = path.join(
-      app.getPath('userData'),
-      'bin',
+      binaryDirectory,
       process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
     );
-    this.packagedBinPath = app.isPackaged
-      ? path.join(
-          process.resourcesPath,
-          'bin',
-          process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
-        )
-      : path.join(
-          process.cwd(),
-          'resources',
-          'bin',
-          process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
-        );
+    this.packagedBinPath = path.join(
+      resourceBinaryDirectory,
+      process.platform === 'win32' ? 'yt-dlp.exe' : 'yt-dlp',
+    );
+    this.userDenoPath = path.join(
+      binaryDirectory,
+      process.platform === 'win32' ? 'deno.exe' : 'deno',
+    );
+    this.packagedDenoPath = path.join(
+      resourceBinaryDirectory,
+      process.platform === 'win32' ? 'deno.exe' : 'deno',
+    );
   }
 
   ensureBinary(log: LogSink) {
@@ -160,11 +114,27 @@ export class YtDlpService {
       log({ type: 'success', message: `yt-dlp binary staged at ${this.userBinPath}` });
     }
 
+    if (!fs.existsSync(this.userDenoPath) && fs.existsSync(this.packagedDenoPath)) {
+      fs.copyFileSync(this.packagedDenoPath, this.userDenoPath);
+      if (process.platform !== 'win32') {
+        fs.chmodSync(this.userDenoPath, 0o755);
+      }
+      log({ type: 'success', message: `Deno JavaScript runtime staged at ${this.userDenoPath}` });
+    }
+
     if (!fs.existsSync(this.userBinPath)) {
       log({
         type: 'warning',
         message:
           'yt-dlp.exe is missing. Run npm run fetch:binaries before launching the Electron app.',
+      });
+    }
+
+    if (!fs.existsSync(this.userDenoPath)) {
+      log({
+        type: 'warning',
+        message:
+          'Deno JavaScript runtime is missing. Some YouTube downloads may fail with HTTP 403 until resources/bin/deno.exe is bundled.',
       });
     }
   }
@@ -219,7 +189,7 @@ export class YtDlpService {
             ? entry.url
             : `https://www.youtube.com/watch?v=${entry.id || entry.url}`,
           thumbnailUrl: entry.thumbnail || entry.thumbnails?.at?.(-1)?.url || '',
-          genre: resolveGenre(entry, json),
+          genre: resolveMusicGenre(entry, json),
         })),
       };
     }
@@ -237,8 +207,14 @@ export class YtDlpService {
   ) {
     const jobId = `job-${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const playlistControl = request.isPlaylist
-      ? this.createPlaylistControl(request.playlistId, jobId)
+      ? this.createPlaylistControl(request.playlistId, jobId, emitProgress)
       : undefined;
+    const emitJobProgress: ProgressSink = (event) => {
+      if (playlistControl) {
+        playlistControl.lastProgress = event;
+      }
+      emitProgress(event);
+    };
 
     queueMicrotask(async () => {
       try {
@@ -266,15 +242,7 @@ export class YtDlpService {
             if (playlistControl?.cancelled) throw new CancelledDownloadError();
 
             const item = playlist.tracks[index];
-            const metadata: TrackMetadata = {
-              title: item.title,
-              artist: item.artist,
-              album: playlist.name,
-              duration: item.duration,
-              genre: item.genre || 'Music',
-              thumbnailUrl: item.thumbnailUrl || '',
-              url: item.url,
-            };
+            const metadata = await this.resolvePlaylistTrackMetadata(item, playlist.name);
 
             if (hasTrackIdentity(downloadedTrackKeys, metadata)) {
               completed += 1;
@@ -283,7 +251,7 @@ export class YtDlpService {
                 type: 'info',
                 message: `Skipped duplicate playlist track: ${metadata.artist} - ${metadata.title}`,
               });
-              emitProgress({
+              emitJobProgress({
                 jobId,
                 playlistId: request.playlistId,
                 title: metadata.title,
@@ -312,7 +280,7 @@ export class YtDlpService {
                   metadata,
                 },
                 metadata,
-                emitProgress,
+                emitJobProgress,
                 log,
               );
             } catch (error) {
@@ -333,7 +301,7 @@ export class YtDlpService {
             });
             completed += 1;
             updatePlaylist?.(completed, completed === playlist.tracks.length);
-            emitProgress({
+            emitJobProgress({
               jobId,
               playlistId: request.playlistId,
               track,
@@ -368,6 +336,7 @@ export class YtDlpService {
           progress: 100,
           speed: 'complete',
           eta: '00:00',
+          genre: metadata.genre,
           status: 'completed',
         });
       } catch (error: any) {
@@ -402,6 +371,7 @@ export class YtDlpService {
   }
 
   cancel(jobId: string) {
+    this.cancelledJobIds.add(jobId);
     const playlistControl = Array.from(this.playlistControls.values()).find(
       (control) => control.currentJobId === jobId,
     );
@@ -423,6 +393,14 @@ export class YtDlpService {
     if (!control || control.cancelled) return false;
 
     control.paused = true;
+    if (control.lastProgress) {
+      control.emitProgress({
+        ...control.lastProgress,
+        status: 'paused',
+        speed: 'paused',
+        eta: '--:--',
+      });
+    }
     const child = this.jobs.get(control.currentJobId);
     child?.kill();
     return true;
@@ -433,6 +411,17 @@ export class YtDlpService {
     if (!control || control.cancelled) return false;
 
     control.paused = false;
+    if (control.lastProgress) {
+      control.emitProgress({
+        ...control.lastProgress,
+        status:
+          control.lastProgress.status === 'fetching' || control.lastProgress.progress <= 0
+            ? 'fetching'
+            : 'downloading',
+        speed: 'resuming',
+        eta: '--:--',
+      });
+    }
     control.resume?.();
     control.resume = undefined;
     return true;
@@ -578,13 +567,47 @@ export class YtDlpService {
     };
   }
 
+  private async resolvePlaylistTrackMetadata(
+    item: PlaylistMetadata['tracks'][number],
+    playlistName: string,
+  ): Promise<TrackMetadata> {
+    const fallback: TrackMetadata = {
+      title: item.title,
+      artist: item.artist,
+      album: playlistName,
+      duration: item.duration,
+      genre: item.genre || 'Music',
+      thumbnailUrl: item.thumbnailUrl || '',
+      url: item.url,
+    };
+
+    try {
+      const inspected = (await this.inspect({
+        url: item.url,
+        isPlaylist: false,
+      })) as TrackMetadata;
+
+      return {
+        title: inspected.title || fallback.title,
+        artist: inspected.artist || fallback.artist,
+        album: playlistName,
+        duration: inspected.duration || fallback.duration,
+        genre: chooseMoreSpecificGenre(inspected.genre, fallback.genre),
+        thumbnailUrl: inspected.thumbnailUrl || fallback.thumbnailUrl,
+        url: normalizeSingleMediaUrl(inspected.url || fallback.url),
+      };
+    } catch {
+      return fallback;
+    }
+  }
+
   private toTrackMetadata(json: any, fallbackUrl: string): TrackMetadata {
     return {
       title: json.track || json.title || 'Untitled Track',
       artist: json.artist || json.creator || json.uploader || json.channel || 'YouTube',
       album: json.album || json.playlist_title || 'CarTune Downloads',
       duration: Math.round(Number(json.duration || 0)),
-      genre: resolveGenre(json),
+      genre: resolveMusicGenre(json),
       thumbnailUrl: json.thumbnail || json.thumbnails?.at?.(-1)?.url || '',
       url: normalizeSingleMediaUrl(json.webpage_url || fallbackUrl),
     };
@@ -597,7 +620,9 @@ export class YtDlpService {
         return;
       }
 
-      const child = spawn(this.userBinPath, args, { windowsHide: true });
+      const child = spawn(this.userBinPath, [...this.getJsRuntimeArgs(), ...args], {
+        windowsHide: true,
+      });
       let stdout = '';
       let stderr = '';
 
@@ -629,7 +654,15 @@ export class YtDlpService {
     jobId: string,
   ) {
     return new Promise<void>((resolve, reject) => {
-      const child = spawn(command, args, { windowsHide: true });
+      if (this.cancelledJobIds.has(jobId)) {
+        this.cancelledJobIds.delete(jobId);
+        reject(new CancelledDownloadError());
+        return;
+      }
+
+      const child = spawn(command, [...this.getProcessRuntimeArgs(command), ...args], {
+        windowsHide: true,
+      });
       this.jobs.set(jobId, child);
       const recentOutput: string[] = [];
 
@@ -660,6 +693,11 @@ export class YtDlpService {
         const control = Array.from(this.playlistControls.values()).find(
           (item) => item.currentJobId === jobId,
         );
+        if (this.cancelledJobIds.has(jobId)) {
+          this.cancelledJobIds.delete(jobId);
+          reject(new CancelledDownloadError());
+          return;
+        }
         if (control?.cancelled) {
           reject(new CancelledDownloadError());
           return;
@@ -684,13 +722,18 @@ export class YtDlpService {
     });
   }
 
-  private createPlaylistControl(playlistId: string | undefined, jobId: string) {
+  private createPlaylistControl(
+    playlistId: string | undefined,
+    jobId: string,
+    emitProgress: ProgressSink,
+  ) {
     if (!playlistId) return undefined;
 
     const control: PlaylistControl = {
       paused: false,
       cancelled: false,
       currentJobId: jobId,
+      emitProgress,
     };
     this.playlistControls.set(playlistId, control);
     return control;
@@ -702,5 +745,15 @@ export class YtDlpService {
     return new Promise<void>((resolve) => {
       control.resume = resolve;
     });
+  }
+
+  private getProcessRuntimeArgs(command: string) {
+    return path.normalize(command) === path.normalize(this.userBinPath)
+      ? this.getJsRuntimeArgs()
+      : [];
+  }
+
+  private getJsRuntimeArgs() {
+    return fs.existsSync(this.userDenoPath) ? ['--js-runtimes', `deno:${this.userDenoPath}`] : [];
   }
 }

@@ -68,6 +68,7 @@ describe('PlaylistManager', () => {
       },
       library: {
         listTracks: vi.fn(),
+        refresh: vi.fn(),
         deleteTrack: vi.fn(),
         clearTracks: vi.fn(),
         listPlaylists: vi.fn(),

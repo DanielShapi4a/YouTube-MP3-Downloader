@@ -72,6 +72,7 @@ export default function App() {
   const playlistTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const nativeJobIdRef = useRef<string | null>(null);
   const pendingNativeCancelRef = useRef<boolean>(false);
+  const cancelledNativeJobIdsRef = useRef<Set<string>>(new Set());
 
   // Sync to local storage
   useEffect(() => {
@@ -143,6 +144,18 @@ export default function App() {
   }, [desktopApi]);
 
   function handleNativeDownloadProgress(event: DownloadProgressEvent) {
+    if (cancelledNativeJobIdsRef.current.has(event.jobId)) {
+      if (event.status === 'completed' || event.status === 'failed') {
+        cancelledNativeJobIdsRef.current.delete(event.jobId);
+      }
+      return;
+    }
+
+    const activeNativeJobId = nativeJobIdRef.current;
+    if (activeNativeJobId && event.jobId !== activeNativeJobId) {
+      return;
+    }
+
     if (event.status === 'completed') {
       if (event.track) {
         const completedTrack = event.track;
@@ -203,6 +216,7 @@ export default function App() {
     if (desktopApi) {
       const nativeJobId = nativeJobIdRef.current;
       if (nativeJobId) {
+        cancelledNativeJobIdsRef.current.add(nativeJobId);
         desktopApi.downloads.cancel(nativeJobId).catch((error) => {
           addLog('error', `Unable to cancel native download: ${getErrorMessage(error)}`);
         });
@@ -244,6 +258,27 @@ export default function App() {
       addLog('error', `Unable to delete track from SQLite: ${getErrorMessage(error)}`);
     });
     addLog('info', `Completed track removed from local indexes: ${id}`);
+  };
+
+  const handleRefreshLibrary = async () => {
+    if (desktopApi) {
+      try {
+        const result = await desktopApi.library.refresh();
+        setTracks(result.tracks);
+        setPlaylists(result.playlists);
+        addLog(
+          result.removedTracks > 0 ? 'warning' : 'success',
+          result.removedTracks > 0
+            ? `Library refreshed. Removed ${result.removedTracks} missing local file entries.`
+            : 'Library refreshed. Local files are in sync.',
+        );
+      } catch (error: unknown) {
+        addLog('error', `Unable to refresh desktop library: ${getErrorMessage(error)}`);
+      }
+      return;
+    }
+
+    addLog('info', 'Library refresh is only needed for the native desktop file system.');
   };
 
   // Launch simulated downloading process from metadata
@@ -605,6 +640,7 @@ export default function App() {
               tracks={tracks}
               onDeleteTrack={handleDeleteTrack}
               onClearAllTracks={handleClearAllTracks}
+              onRefreshLibrary={handleRefreshLibrary}
               onAddLog={addLog}
             />
           )}

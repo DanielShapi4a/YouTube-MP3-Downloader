@@ -42,9 +42,13 @@ describe('library utilities', () => {
   });
 
   it('returns stable unique genre labels', () => {
-    expect(getUniqueGenres([baseTrack, { ...baseTrack, id: 'track-2' }])).toEqual([
-      'All',
-      'Synthwave',
-    ]);
+    expect(
+      getUniqueGenres([
+        baseTrack,
+        { ...baseTrack, id: 'track-2' },
+        { ...baseTrack, id: 'track-3', genre: 'Acoustic' },
+        { ...baseTrack, id: 'track-4', genre: '' },
+      ]),
+    ).toEqual(['All', 'Acoustic', 'Synthwave']);
   });
 });

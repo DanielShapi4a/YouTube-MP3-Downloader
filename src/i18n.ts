@@ -38,6 +38,7 @@ export const translations = {
     // Completed
     library: 'Library',
     libraryDesc: 'Your successfully downloaded and converted tracks.',
+    refreshLibrary: 'Refresh',
     clearAll: 'Clear All',
     itemsCount: 'Items',
     searchPlaceholder: 'Search tracks by title, artist, or genre...',
@@ -131,6 +132,7 @@ export const translations = {
     // Completed
     library: 'Библиотека',
     libraryDesc: 'Успешно скачанные и конвертированные треки.',
+    refreshLibrary: 'Обновить',
     clearAll: 'Очистить всё',
     itemsCount: 'Треков',
     searchPlaceholder: 'Поиск треков по названию, артисту...',
@@ -224,6 +226,7 @@ export const translations = {
     // Completed
     library: 'ספרייה',
     libraryDesc: 'השירים שהורדו והומרו בהצלחה.',
+    refreshLibrary: 'רענן',
     clearAll: 'נקה הכל',
     itemsCount: 'שירים',
     searchPlaceholder: "חפש שיר לפי שם, אמן או ז'אנר...",

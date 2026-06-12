@@ -114,4 +114,26 @@ describe('download state service', () => {
       }),
     ).toEqual([{ ...playlist, downloadedTracks: 2, status: 'completed' }]);
   });
+
+  it('keeps playlist and dashboard state paused when native playlist progress pauses', () => {
+    const playlist: Playlist = {
+      id: 'playlist-1',
+      name: 'Road Mix',
+      url: 'youtube.test/list',
+      totalTracks: 4,
+      downloadedTracks: 1,
+      status: 'processing',
+      tracks: [],
+    };
+
+    expect(
+      applyPlaylistProgress([playlist], {
+        ...progressEvent,
+        playlistId: 'playlist-1',
+        downloadedTracks: 1,
+        totalTracks: 4,
+        status: 'paused',
+      }),
+    ).toEqual([{ ...playlist, downloadedTracks: 1, status: 'paused' }]);
+  });
 });
